@@ -58,13 +58,19 @@
           </div>
         </dl>
         <span id="meta-total" class="resultado__contador">0 arquivos</span>
+        <div id="meta-tipos" class="resultado__contador" style="margin-top: 8px; font-size: 14px; opacity: 0.9; line-height: 1.3; text-align: left;"></div>
       </div>
 
       <div id="lista-arquivos" class="lista-arquivos"></div>
 
+
       <div class="resultado__rodape">
         <span class="resultado__selo">Análise concluída</span>
-        <a id="link-download" class="botao-download" href="#" download="resumo.txt">
+        <label class="campo" style="display:flex; gap:10px; align-items:center;">
+          <span class="campo__rotulo" style="white-space:nowrap;">Nome do arquivo de texto</span>
+          <input id="input-nome-download" class="campo__input" type="text" placeholder="resumo" autocomplete="off" spellcheck="false" />
+        </label>
+        <a id="link-download" class="botao-download" href="#">
           Baixar resumo.txt
         </a>
       </div>

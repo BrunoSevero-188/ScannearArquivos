@@ -7,8 +7,11 @@ const estadoVazio = document.getElementById("estado-vazio");
 const metaPastaPai = document.getElementById("meta-pasta-pai");
 const metaResumoTxt = document.getElementById("meta-resumo-txt");
 const metaTotal = document.getElementById("meta-total");
+const metaTipos = document.getElementById("meta-tipos");
 const listaArquivos = document.getElementById("lista-arquivos");
+const inputNomeDownload = document.getElementById("input-nome-download");
 const linkDownload = document.getElementById("link-download");
+
 
 async function escanear() {
   const pasta = inputPasta.value.trim();
@@ -75,7 +78,19 @@ function renderizarResultado(dados) {
   metaResumoTxt.textContent = dados.resumo_txt_path;
   metaTotal.textContent = `${dados.total_arquivos} arquivo(s) de texto`;
 
-  linkDownload.href = `/api/download?caminho=${encodeURIComponent(dados.resumo_txt_path)}`;
+  const contagem = dados.contagem_por_extensao || {};
+  const tipos = Object.keys(contagem)
+    .sort((a, b) => contagem[b] - contagem[a])
+    .map((ext) => `${ext}: ${contagem[ext]}`)
+    .join(" | ");
+
+  metaTipos.textContent = tipos ? `Tipos: ${tipos}` : "Tipos: -";
+
+  const nomeBase = (inputNomeDownload.value || "resumo").trim();
+  const filename = nomeBase.endsWith(".txt") ? nomeBase : `${nomeBase}.txt`;
+
+  linkDownload.href = `/api/download?caminho=${encodeURIComponent(dados.resumo_txt_path)}&filename=${encodeURIComponent(filename)}`;
+
 
   listaArquivos.innerHTML = "";
 

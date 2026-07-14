@@ -1,0 +1,974 @@
+Caminho da pasta "pai" que foi analisado: E:\Projetos de Programação\ProjetosPhyton\ScannerArquivos
+Link local do resumo.txt: E:\Projetos de Programação\ProjetosPhyton\ScannerArquivos\resumo.txt
+
+Quantidade de arquivos de texto encontrados: 6
+Quebra por tipo (extensão):
+- .css: 1
+- .html: 1
+- .js: 1
+- .md: 2
+- .py: 1
+
+Caminho do (backend.py):
+import http.server
+import socketserver
+import json
+from pathlib import Path
+from datetime import datetime
+from urllib.parse import urlparse, parse_qs, unquote
+
+PORTA = 8000
+PASTA_FRONTEND = Path(__file__).parent / "frontend"
+
+# Extensões consideradas "arquivo de texto" -> só essas entram na análise
+EXTENSOES_TEXTO = {
+    ".txt",
+    ".py",
+    ".json",
+    ".csv",
+    ".md",
+    ".html",
+    ".htm",
+    ".css",
+    ".js",
+    ".xml",
+    ".yaml",
+    ".yml",
+    ".log",
+    ".ini",
+    ".cfg",
+    ".conf",
+    ".sql",
+    ".sh",
+    ".bat",
+    ".ts",
+    ".jsx",
+    ".tsx",
+    ".java",
+    ".c",
+    ".cpp",
+    ".h",
+    ".env",
+    ".toml",
+    ".ps1",
+}
+
+LIMITE_CARACTERES_POR_ARQUIVO = 20000  # evita travar o front com arquivos gigantes
+
+
+def eh_arquivo_de_texto(caminho: Path) -> bool:
+    return caminho.suffix.lower() in EXTENSOES_TEXTO
+
+
+def ler_conteudo(caminho: Path) -> str:
+    try:
+        conteudo = caminho.read_text(encoding="utf-8", errors="replace")
+    except Exception as e:
+        return f"[Não foi possível ler o arquivo: {e}]"
+
+    if len(conteudo) > LIMITE_CARACTERES_POR_ARQUIVO:
+        conteudo = (
+            conteudo[:LIMITE_CARACTERES_POR_ARQUIVO]
+            + f"\n\n[...conteúdo truncado - arquivo tem {len(conteudo)} caracteres...]"
+        )
+    return conteudo
+
+
+def montar_texto_resumo(
+    pasta_pai: Path,
+    resumo_txt: Path,
+    arquivos: list,
+    contagem_por_extensao: dict,
+    total_arquivos: int,
+) -> str:
+    linhas = []
+    linhas.append(f'Caminho da pasta "pai" que foi analisado: {pasta_pai}')
+    linhas.append(f"Link local do resumo.txt: {resumo_txt}")
+    linhas.append("")
+
+    linhas.append(f"Quantidade de arquivos de texto encontrados: {total_arquivos}")
+    linhas.append("Quebra por tipo (extensão):")
+
+    if not contagem_por_extensao:
+        linhas.append("- Nenhuma extensão encontrada")
+    else:
+        for extensao in sorted(contagem_por_extensao.keys()):
+            linhas.append(f"- {extensao}: {contagem_por_extensao[extensao]}")
+
+    linhas.append("")
+
+    for item in arquivos:
+        nome_arquivo = Path(item["caminho"]).name
+        linhas.append(f"Caminho do ({nome_arquivo}):")
+        linhas.append(item["conteudo"])
+        linhas.append("")
+
+    linhas.append("Análise concluída")
+    return "\n".join(linhas)
+
+
+def escanear_pasta(caminho_pasta: str) -> dict:
+    pasta = Path(caminho_pasta.strip().strip('"')).expanduser()
+
+    if not pasta.is_dir():
+        raise ValueError(f"Pasta não encontrada: {pasta}")
+
+    pasta_pai = pasta.resolve()
+    resumo_txt_path = pasta_pai / "resumo.txt"
+
+    arquivos = []
+    contagem_por_extensao = {}
+
+    for caminho in sorted(pasta.rglob("*")):
+        if caminho.is_file() and eh_arquivo_de_texto(caminho):
+            if caminho.resolve() == resumo_txt_path:
+                continue  # não inclui o próprio resumo.txt gerado pelo scanner
+
+            extensao = caminho.suffix.lower() or "(sem extensão)"
+            contagem_por_extensao[extensao] = contagem_por_extensao.get(extensao, 0) + 1
+
+            arquivos.append(
+                {
+                    "caminho": str(caminho.resolve()),
+                    "conteudo": ler_conteudo(caminho),
+                }
+            )
+
+    total_arquivos = len(arquivos)
+    texto_resumo = montar_texto_resumo(
+        pasta_pai=pasta_pai,
+        resumo_txt=resumo_txt_path,
+        arquivos=arquivos,
+        contagem_por_extensao=contagem_por_extensao,
+        total_arquivos=total_arquivos,
+    )
+    resumo_txt_path.write_text(texto_resumo, encoding="utf-8")
+
+    return {
+        "pasta_pai": str(pasta_pai),
+        "resumo_txt_path": str(resumo_txt_path),
+        "total_arquivos": total_arquivos,
+        "contagem_por_extensao": contagem_por_extensao,
+        "arquivos": arquivos,
+    }
+
+
+class ScannerRequestHandler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=str(PASTA_FRONTEND), **kwargs)
+
+    def do_GET(self):
+        rota_completa = urlparse(self.path)
+
+        if rota_completa.path == "/api/download":
+            self._servir_download(rota_completa.query)
+            return
+
+        super().do_GET()
+
+    def _servir_download(self, query_string: str):
+        parametros = parse_qs(query_string)
+        caminho_bruto = parametros.get("caminho", [""])[0]
+        caminho_bruto = unquote(caminho_bruto)
+
+        if not caminho_bruto:
+            self.send_error(400, "Parâmetro 'caminho' é obrigatório")
+            return
+
+        caminho = Path(caminho_bruto)
+
+        # só permite baixar arquivos chamados resumo.txt, gerados pelo próprio scanner
+        if caminho.name != "resumo.txt":
+            self.send_error(403, "Só é permitido baixar arquivos resumo.txt")
+            return
+
+        if not caminho.is_file():
+            self.send_error(404, "Arquivo não encontrado")
+            return
+
+        try:
+            conteudo = caminho.read_bytes()
+        except Exception as e:
+            self.send_error(500, f"Erro ao ler arquivo: {e}")
+            return
+
+        filename = parametros.get("filename", [""])[0]
+        filename = filename.strip().strip('"') if filename else "resumo.txt"
+        if not filename:
+            filename = "resumo.txt"
+
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        # Deixa o browser salvar com o nome enviado pelo front
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Content-Length", str(len(conteudo)))
+        self.end_headers()
+        self.wfile.write(conteudo)
+
+    def do_POST(self):
+        rota = urlparse(self.path).path
+
+        if rota == "/api/scan":
+            try:
+                tamanho = int(self.headers.get("Content-Length", 0))
+                corpo = self.rfile.read(tamanho)
+                dados = json.loads(corpo or b"{}")
+                caminho_pasta = dados.get("pasta", "")
+
+                if not caminho_pasta:
+                    self._responder_json(400, {"erro": "Informe o caminho da pasta."})
+                    return
+
+                resultado = escanear_pasta(caminho_pasta)
+                self._responder_json(200, resultado)
+
+            except ValueError as e:
+                self._responder_json(400, {"erro": str(e)})
+            except Exception as e:
+                self._responder_json(500, {"erro": f"Erro interno: {e}"})
+        else:
+            self.send_error(404, "Rota não encontrada")
+
+    def _responder_json(self, status: int, dados: dict):
+        corpo = json.dumps(dados, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(corpo)))
+        self.end_headers()
+        self.wfile.write(corpo)
+
+    def log_message(self, formato, *args):
+        print(f"[{datetime.now():%H:%M:%S}] {formato % args}")
+
+
+class Servidor(socketserver.TCPServer):
+    allow_reuse_address = True
+
+
+def rodar_servidor():
+    with Servidor(("", PORTA), ScannerRequestHandler) as httpd:
+        print(f"Scanner de Arquivos rodando em: http://localhost:{PORTA}")
+        print("Pressione Ctrl+C para encerrar.\n")
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            print("\nServidor encerrado.")
+
+
+if __name__ == "__main__":
+    rodar_servidor()
+
+
+
+Caminho do (index.html):
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scanner de Arquivos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <div class="grid-overlay" aria-hidden="true"></div>
+
+  <header class="topo">
+    <div class="topo__marca">
+      <span class="topo__indicador"></span>
+      <h1 class="topo__titulo">Scanner de Arquivos</h1>
+    </div>
+    <p class="topo__subtitulo">Aponte uma pasta. O scanner varre o conteúdo e devolve o resumo.</p>
+  </header>
+
+  <main class="console">
+
+    <section class="painel-controle" aria-label="Controles do scanner">
+      <label class="campo">
+        <span class="campo__rotulo">Caminho da pasta</span>
+        <input
+          id="input-pasta"
+          class="campo__input"
+          type="text"
+          placeholder="C:\Users\Bruno\Documents\meu-projeto"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </label>
+      <button id="btn-escanear" class="botao-scan">
+        <span class="botao-scan__texto">Escanear</span>
+        <span class="botao-scan__linha" aria-hidden="true"></span>
+      </button>
+    </section>
+
+    <p id="mensagem-erro" class="mensagem-erro" hidden></p>
+
+    <section id="area-resultado" class="resultado" hidden>
+
+      <div class="scanline" aria-hidden="true"></div>
+
+      <div class="resultado__cabecalho">
+        <dl class="resultado__meta">
+          <div class="resultado__meta-linha">
+            <dt>Caminho da pasta "pai" que foi analisado</dt>
+            <dd id="meta-pasta-pai">-</dd>
+          </div>
+          <div class="resultado__meta-linha">
+            <dt>Link local do resumo.txt</dt>
+            <dd id="meta-resumo-txt">-</dd>
+          </div>
+        </dl>
+        <span id="meta-total" class="resultado__contador">0 arquivos</span>
+        <div id="meta-tipos" class="resultado__contador" style="margin-top: 8px; font-size: 14px; opacity: 0.9; line-height: 1.3; text-align: left;"></div>
+      </div>
+
+      <div id="lista-arquivos" class="lista-arquivos"></div>
+
+
+      <div class="resultado__rodape">
+        <span class="resultado__selo">Análise concluída</span>
+        <label class="campo" style="display:flex; gap:10px; align-items:center;">
+          <span class="campo__rotulo" style="white-space:nowrap;">Nome do arquivo de texto</span>
+          <input id="input-nome-download" class="campo__input" type="text" placeholder="resumo" autocomplete="off" spellcheck="false" />
+        </label>
+        <a id="link-download" class="botao-download" href="#">
+          Baixar resumo.txt
+        </a>
+      </div>
+
+    </section>
+
+    <section id="estado-vazio" class="estado-vazio">
+      <p>Nenhuma análise ainda. Informe uma pasta e clique em <strong>Escanear</strong>.</p>
+      <p class="estado-vazio__nota">Somente arquivos de texto (.txt, .py, .json, .csv, .md, .html, .css, .js e afins) entram na análise.</p>
+    </section>
+
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
+
+Caminho do (script.js):
+const inputPasta = document.getElementById("input-pasta");
+const btnEscanear = document.getElementById("btn-escanear");
+const mensagemErro = document.getElementById("mensagem-erro");
+const areaResultado = document.getElementById("area-resultado");
+const estadoVazio = document.getElementById("estado-vazio");
+
+const metaPastaPai = document.getElementById("meta-pasta-pai");
+const metaResumoTxt = document.getElementById("meta-resumo-txt");
+const metaTotal = document.getElementById("meta-total");
+const metaTipos = document.getElementById("meta-tipos");
+const listaArquivos = document.getElementById("lista-arquivos");
+const inputNomeDownload = document.getElementById("input-nome-download");
+const linkDownload = document.getElementById("link-download");
+
+
+async function escanear() {
+  const pasta = inputPasta.value.trim();
+
+  esconderErro();
+
+  if (!pasta) {
+    mostrarErro("Informe o caminho de uma pasta antes de escanear.");
+    return;
+  }
+
+  iniciarEstadoCarregando();
+
+  try {
+    const resposta = await fetch("/api/scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pasta }),
+    });
+
+    const dados = await resposta.json();
+
+    if (!resposta.ok) {
+      mostrarErro(dados.erro || "Não foi possível concluir o scan.");
+      return;
+    }
+
+    renderizarResultado(dados);
+
+  } catch (erro) {
+    mostrarErro("Falha de conexão com o servidor. O backend.py está rodando?");
+  } finally {
+    finalizarEstadoCarregando();
+  }
+}
+
+function iniciarEstadoCarregando() {
+  btnEscanear.disabled = true;
+  btnEscanear.classList.add("escaneando");
+  btnEscanear.querySelector(".botao-scan__texto").textContent = "Escaneando...";
+}
+
+function finalizarEstadoCarregando() {
+  btnEscanear.disabled = false;
+  btnEscanear.classList.remove("escaneando");
+  btnEscanear.querySelector(".botao-scan__texto").textContent = "Escanear";
+}
+
+function mostrarErro(texto) {
+  mensagemErro.textContent = texto;
+  mensagemErro.hidden = false;
+}
+
+function esconderErro() {
+  mensagemErro.hidden = true;
+  mensagemErro.textContent = "";
+}
+
+function renderizarResultado(dados) {
+  estadoVazio.hidden = true;
+  areaResultado.hidden = false;
+
+  metaPastaPai.textContent = dados.pasta_pai;
+  metaResumoTxt.textContent = dados.resumo_txt_path;
+  metaTotal.textContent = `${dados.total_arquivos} arquivo(s) de texto`;
+
+  const contagem = dados.contagem_por_extensao || {};
+  const tipos = Object.keys(contagem)
+    .sort((a, b) => contagem[b] - contagem[a])
+    .map((ext) => `${ext}: ${contagem[ext]}`)
+    .join(" | ");
+
+  metaTipos.textContent = tipos ? `Tipos: ${tipos}` : "Tipos: -";
+
+  const nomeBase = (inputNomeDownload.value || "resumo").trim();
+  const filename = nomeBase.endsWith(".txt") ? nomeBase : `${nomeBase}.txt`;
+
+  linkDownload.href = `/api/download?caminho=${encodeURIComponent(dados.resumo_txt_path)}&filename=${encodeURIComponent(filename)}`;
+
+
+  listaArquivos.innerHTML = "";
+
+  if (dados.arquivos.length === 0) {
+    const vazio = document.createElement("p");
+    vazio.className = "arquivo__conteudo";
+    vazio.textContent = "Nenhum arquivo de texto encontrado nessa pasta.";
+    listaArquivos.appendChild(vazio);
+  }
+
+  for (const arquivo of dados.arquivos) {
+    const nomeArquivo = arquivo.caminho.split(/[\\/]/).pop();
+
+    const bloco = document.createElement("article");
+    bloco.className = "arquivo";
+
+    const cabecalho = document.createElement("p");
+    cabecalho.className = "arquivo__cabecalho";
+    cabecalho.textContent = `Caminho do (${nomeArquivo}): ${arquivo.caminho}`;
+
+    const conteudo = document.createElement("pre");
+    conteudo.className = "arquivo__conteudo";
+    conteudo.textContent = arquivo.conteudo;
+
+    bloco.appendChild(cabecalho);
+    bloco.appendChild(conteudo);
+    listaArquivos.appendChild(bloco);
+  }
+
+  // dispara a animação da linha de varredura a cada novo resultado
+  areaResultado.classList.remove("varrendo");
+  void areaResultado.offsetWidth; // força reflow pra reiniciar a animação
+  areaResultado.classList.add("varrendo");
+}
+
+btnEscanear.addEventListener("click", escanear);
+inputPasta.addEventListener("keydown", (evento) => {
+  if (evento.key === "Enter") {
+    escanear();
+  }
+});
+
+Caminho do (style.css):
+:root {
+  --bg: #EEF2F6;
+  --bg-grid-line: #D7E0E8;
+  --panel: #FFFFFF;
+  --panel-border: #D2DBE3;
+  --ink: #17263A;
+  --ink-soft: #5B6B7D;
+  --ink-faint: #93A2B2;
+  --accent-scan: #0891A8;
+  --accent-scan-glow: rgba(8, 145, 168, 0.35);
+  --accent-warn: #C9791C;
+  --accent-ok: #1F8A5C;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+  --font-body: "Inter", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  position: relative;
+}
+
+/* --- fundo estilo papel milimetrado / blueprint --- */
+.grid-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--bg-grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bg-grid-line) 1px, transparent 1px);
+  background-size: 32px 32px;
+  opacity: 0.6;
+  z-index: 0;
+}
+
+.topo,
+.console {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- topo --- */
+.topo {
+  padding: 48px 24px 24px;
+  max-width: 760px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.topo__marca {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.topo__indicador {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent-scan);
+  box-shadow: 0 0 0 4px var(--accent-scan-glow);
+  animation: pulsar 2.2s ease-in-out infinite;
+}
+
+@keyframes pulsar {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.topo__titulo {
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.topo__subtitulo {
+  font-size: 0.95rem;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+/* --- console / conteúdo principal --- */
+.console {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 24px 64px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* --- painel de controle --- */
+.painel-controle {
+  display: flex;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: 0 1px 2px rgba(23, 38, 58, 0.04);
+}
+
+.campo {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.campo__rotulo {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-faint);
+  font-weight: 500;
+}
+
+.campo__input {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  padding: 10px 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: #FBFCFD;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.campo__input:focus-visible {
+  border-color: var(--accent-scan);
+  box-shadow: 0 0 0 3px var(--accent-scan-glow);
+}
+
+.botao-scan {
+  position: relative;
+  align-self: flex-end;
+  overflow: hidden;
+  border: none;
+  border-radius: 6px;
+  background: var(--ink);
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.9rem;
+  padding: 11px 22px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.botao-scan:hover {
+  background: #24374F;
+}
+
+.botao-scan:active {
+  transform: scale(0.98);
+}
+
+.botao-scan:disabled {
+  cursor: progress;
+  opacity: 0.85;
+}
+
+.botao-scan__linha {
+  position: absolute;
+  left: -30%;
+  top: 0;
+  width: 30%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
+  display: none;
+}
+
+.botao-scan.escaneando .botao-scan__linha {
+  display: block;
+  animation: varrer 1.1s linear infinite;
+}
+
+@keyframes varrer {
+  from { left: -30%; }
+  to { left: 100%; }
+}
+
+/* --- mensagem de erro --- */
+.mensagem-erro {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--accent-warn);
+  background: #FBF1E4;
+  border: 1px solid #EAD3AC;
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin: 0;
+}
+
+/* --- estado vazio --- */
+.estado-vazio {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--ink-faint);
+  border: 1px dashed var(--panel-border);
+  border-radius: 10px;
+}
+
+.estado-vazio p {
+  margin: 0 0 6px;
+}
+
+.estado-vazio__nota {
+  font-size: 0.82rem;
+}
+
+/* --- resultado --- */
+.resultado {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(23, 38, 58, 0.04);
+}
+
+.scanline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent-scan), transparent);
+  box-shadow: 0 0 12px 2px var(--accent-scan-glow);
+  opacity: 0;
+}
+
+.resultado.varrendo .scanline {
+  opacity: 1;
+  animation: descer 1.4s ease-in-out;
+}
+
+@keyframes descer {
+  from { top: 0; }
+  to { top: 100%; }
+}
+
+.resultado__cabecalho {
+  padding: 20px 22px;
+  border-bottom: 1px dashed var(--panel-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.resultado__meta {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.resultado__meta-linha dt {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-faint);
+  margin: 0 0 2px;
+}
+
+.resultado__meta-linha dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--ink);
+  word-break: break-all;
+}
+
+.resultado__contador {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--accent-scan);
+  background: rgba(8, 145, 168, 0.08);
+  border: 1px solid rgba(8, 145, 168, 0.25);
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+/* --- lista de arquivos (tiras estilo comprovante de scanner) --- */
+.lista-arquivos {
+  display: flex;
+  flex-direction: column;
+}
+
+.arquivo {
+  border-bottom: 1px dashed var(--panel-border);
+  padding: 16px 22px;
+}
+
+.arquivo:last-child {
+  border-bottom: none;
+}
+
+.arquivo__cabecalho {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: var(--ink);
+  font-weight: 500;
+  margin: 0 0 8px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.arquivo__cabecalho::before {
+  content: "›";
+  color: var(--accent-scan);
+}
+
+.arquivo__conteudo {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  background: #FBFCFD;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+
+/* --- rodapé --- */
+.resultado__rodape {
+  padding: 16px 22px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.resultado__selo {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--accent-ok);
+  border: 1px solid rgba(31, 138, 92, 0.35);
+  background: rgba(31, 138, 92, 0.08);
+  border-radius: 999px;
+  padding: 6px 16px;
+  letter-spacing: 0.03em;
+}
+
+.botao-download {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #fff;
+  background: var(--accent-scan);
+  border-radius: 999px;
+  padding: 6px 16px;
+  letter-spacing: 0.03em;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.botao-download::before {
+  content: "↓";
+  font-weight: 700;
+}
+
+.botao-download:hover {
+  background: #076B7D;
+}
+
+.botao-download:active {
+  transform: scale(0.97);
+}
+
+/* --- responsivo --- */
+@media (max-width: 560px) {
+  .painel-controle {
+    flex-direction: column;
+  }
+  .botao-scan {
+    align-self: stretch;
+  }
+  .resultado__cabecalho {
+    flex-direction: column;
+  }
+}
+
+/* --- respeita usuários que preferem menos movimento --- */
+@media (prefers-reduced-motion: reduce) {
+  .topo__indicador,
+  .botao-scan.escaneando .botao-scan__linha,
+  .resultado.varrendo .scanline {
+    animation: none;
+  }
+}
+
+Caminho do (README.md):
+# Scanner de Arquivos
+
+## O que é este sistema
+Este projeto é um **scanner local de arquivos de texto** com interface web.
+
+Ele é composto por:
+- **backend.py**: servidor HTTP simples em Python (usando apenas a biblioteca padrão), que faz a varredura de uma pasta no seu computador.
+- **frontend/**: interface em HTML/CSS/JS que permite informar o caminho de uma pasta e visualizar os resultados.
+
+## Como funciona
+1. O front-end envia um **POST** para o backend com o caminho de uma pasta.
+2. O backend **varre recursivamente** todos os arquivos dentro dessa pasta.
+3. Apenas arquivos com **extensões consideradas de texto** são analisados.
+4. O conteúdo de cada arquivo (com limite de tamanho) é incluído em um **resumo.txt** gerado **dentro da própria pasta analisada**.
+5. O backend retorna um JSON com:
+   - caminho da pasta analisada
+   - caminho do `resumo.txt`
+   - total de arquivos de texto encontrados
+   - lista dos arquivos e seus conteúdos (para o front mostrar)
+
+## Arquivos analisados (extensões)
+O sistema considera “arquivo de texto” as seguintes extensões:
+`.txt, .py, .json, .csv, .md, .html, .htm, .css, .js, .xml, .yaml, .yml, .log, .ini, .cfg, .conf, .sql, .sh, .bat, .ts, .jsx, .tsx, .java, .c, .cpp, .h, .env, .toml, .ps1`
+
+> Observação: o scanner **ignora** o próprio arquivo `resumo.txt` para não ficar reanalisando o resultado.
+
+## Rotas do backend
+- **POST `/api/scan`**
+  - Body (JSON): `{ "pasta": "<caminho>" }`
+  - Resposta: JSON com os dados do scan e o conteúdo dos arquivos encontrados.
+
+- **GET `/api/download?caminho=<caminho>`**
+  - Permite baixar o arquivo **somente se** o arquivo se chamar `resumo.txt`.
+
+## Rodando
+1. Inicie o servidor:
+   - `python backend.py`
+2. Abra no navegador:
+   - `http://localhost:8000`
+3. Informe o caminho da pasta e clique em **Escanear**.
+
+
+
+Caminho do (TODO.md):
+- [ ] Atualizar backend.py para:
+  - [x] Calcular quantidade de arquivos por extensão (tipo) durante o scan
+  - [x] Incluir essa informação no JSON retornado
+  - [x] Incluir no texto do resumo.txt uma seção com total e breakdown por extensão
+  - [x] Ajustar download para permitir renomear o arquivo no browser (remover filename fixo no Content-Disposition e retornar com nome enviado pelo front)
+- [ ] Atualizar frontend/index.html para:
+  - [x] Adicionar campo/input para o usuário definir o nome do arquivo de texto para download (sem extensão ou com extensão)
+  - [ ] Atualizar label “Link local do resumo.txt” para refletir novo comportamento se necessário
+- [ ] Atualizar frontend/script.js para:
+  - [x] Exibir no resumo/contadores a quantidade e o tipo (extensões) escaneadas
+  - [x] No clique do download, solicitar/ler nome do usuário e enviar ao backend para download
+- [ ] Testar manualmente:
+  - [ ] Rodar python backend.py
+  - [ ] Escanear uma pasta com diferentes extensões
+  - [ ] Verificar resumo.txt com nova seção
+  - [ ] Baixar e confirmar que o arquivo salvo tem o nome definido pelo usuário
+
+
+
+
+Análise concluída
