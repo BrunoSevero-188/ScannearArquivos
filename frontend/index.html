@@ -9,7 +9,6 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-
   <div class="grid-overlay" aria-hidden="true"></div>
 
   <header class="topo">
@@ -24,7 +23,7 @@
 
     <section class="painel-controle" aria-label="Controles do scanner">
       <label class="campo">
-        <span class="campo__rotulo">Caminho da pasta</span>
+        <span class="campo__rotulo">Caminho que vai ser analisado</span>
         <input
           id="input-pasta"
           class="campo__input"
@@ -34,6 +33,33 @@
           spellcheck="false"
         />
       </label>
+
+      <label class="campo">
+        <span class="campo__rotulo">Caminho onde vai ser salvo</span>
+        <input
+          id="input-destino-download"
+          class="campo__input"
+          type="text"
+          placeholder="Opcional: deixe em branco para baixar pelo navegador"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </label>
+      <p class="campo__dica">Se ficar em branco, o resumo é baixado pelo navegador em vez de salvo na pasta analisada.</p>
+
+      <label class="campo">
+        <span class="campo__rotulo">Nome do arquivo</span>
+        <input
+          id="input-nome-download"
+          class="campo__input"
+          type="text"
+          placeholder="resumo"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </label>
+      <p class="campo__dica">Se não for informado, o nome padrão será "resumo.txt".</p>
+
       <button id="btn-escanear" class="botao-scan">
         <span class="botao-scan__texto">Escanear</span>
         <span class="botao-scan__linha" aria-hidden="true"></span>
@@ -43,9 +69,7 @@
     <p id="mensagem-erro" class="mensagem-erro" hidden></p>
 
     <section id="area-resultado" class="resultado" hidden>
-
       <div class="scanline" aria-hidden="true"></div>
-
       <div class="resultado__cabecalho">
         <dl class="resultado__meta">
           <div class="resultado__meta-linha">
@@ -53,7 +77,7 @@
             <dd id="meta-pasta-pai">-</dd>
           </div>
           <div class="resultado__meta-linha">
-            <dt>Link local do resumo.txt</dt>
+            <dt>Resumo</dt>
             <dd id="meta-resumo-txt">-</dd>
           </div>
         </dl>
@@ -63,18 +87,9 @@
 
       <div id="lista-arquivos" class="lista-arquivos"></div>
 
-
       <div class="resultado__rodape">
         <span class="resultado__selo">Análise concluída</span>
-        <label class="campo" style="display:flex; gap:10px; align-items:center;">
-          <span class="campo__rotulo" style="white-space:nowrap;">Nome do arquivo de texto</span>
-          <input id="input-nome-download" class="campo__input" type="text" placeholder="resumo" autocomplete="off" spellcheck="false" />
-        </label>
-        <a id="link-download" class="botao-download" href="#">
-          Baixar resumo.txt
-        </a>
       </div>
-
     </section>
 
     <section id="estado-vazio" class="estado-vazio">

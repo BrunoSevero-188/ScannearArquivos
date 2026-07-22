@@ -1,4 +1,6 @@
 const inputPasta = document.getElementById("input-pasta");
+const inputDestinoDownload = document.getElementById("input-destino-download");
+const inputNomeDownload = document.getElementById("input-nome-download");
 const btnEscanear = document.getElementById("btn-escanear");
 const mensagemErro = document.getElementById("mensagem-erro");
 const areaResultado = document.getElementById("area-resultado");
@@ -9,13 +11,11 @@ const metaResumoTxt = document.getElementById("meta-resumo-txt");
 const metaTotal = document.getElementById("meta-total");
 const metaTipos = document.getElementById("meta-tipos");
 const listaArquivos = document.getElementById("lista-arquivos");
-const inputNomeDownload = document.getElementById("input-nome-download");
-const linkDownload = document.getElementById("link-download");
-
 
 async function escanear() {
   const pasta = inputPasta.value.trim();
-
+  const destino = inputDestinoDownload.value.trim();
+  const filename = inputNomeDownload.value.trim();
   esconderErro();
 
   if (!pasta) {
@@ -29,7 +29,7 @@ async function escanear() {
     const resposta = await fetch("/api/scan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pasta }),
+      body: JSON.stringify({ pasta, destino, filename }),
     });
 
     const dados = await resposta.json();
@@ -41,11 +41,28 @@ async function escanear() {
 
     renderizarResultado(dados);
 
+    // Se nenhum destino foi informado, baixa o resumo pelo navegador.
+    // Se um destino foi informado, o backend já salvou o arquivo lá.
+    if (!dados.salvo_em) {
+      baixarPeloNavegador(dados.texto_resumo, dados.nome_arquivo);
+    }
   } catch (erro) {
     mostrarErro("Falha de conexão com o servidor. O backend.py está rodando?");
   } finally {
     finalizarEstadoCarregando();
   }
+}
+
+function baixarPeloNavegador(conteudo, nomeArquivo) {
+  const blob = new Blob([conteudo], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = nomeArquivo || "resumo.txt";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function iniciarEstadoCarregando() {
@@ -75,7 +92,9 @@ function renderizarResultado(dados) {
   areaResultado.hidden = false;
 
   metaPastaPai.textContent = dados.pasta_pai;
-  metaResumoTxt.textContent = dados.resumo_txt_path;
+  metaResumoTxt.textContent = dados.salvo_em
+    ? `Salvo em: ${dados.salvo_em}`
+    : `Baixado pelo navegador como "${dados.nome_arquivo}"`;
   metaTotal.textContent = `${dados.total_arquivos} arquivo(s) de texto`;
 
   const contagem = dados.contagem_por_extensao || {};
@@ -83,14 +102,7 @@ function renderizarResultado(dados) {
     .sort((a, b) => contagem[b] - contagem[a])
     .map((ext) => `${ext}: ${contagem[ext]}`)
     .join(" | ");
-
   metaTipos.textContent = tipos ? `Tipos: ${tipos}` : "Tipos: -";
-
-  const nomeBase = (inputNomeDownload.value || "resumo").trim();
-  const filename = nomeBase.endsWith(".txt") ? nomeBase : `${nomeBase}.txt`;
-
-  linkDownload.href = `/api/download?caminho=${encodeURIComponent(dados.resumo_txt_path)}&filename=${encodeURIComponent(filename)}`;
-
 
   listaArquivos.innerHTML = "";
 
