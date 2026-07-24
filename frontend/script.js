@@ -2,6 +2,9 @@ const inputPasta = document.getElementById("input-pasta");
 const inputDestinoDownload = document.getElementById("input-destino-download");
 const inputNomeDownload = document.getElementById("input-nome-download");
 const btnEscanear = document.getElementById("btn-escanear");
+const botaoScanProgresso = document.getElementById("botao-scan-progresso");
+const botaoScanTexto = document.getElementById("botao-scan-texto");
+const btnDrive = document.getElementById("btn-drive");
 const mensagemErro = document.getElementById("mensagem-erro");
 const areaResultado = document.getElementById("area-resultado");
 const estadoVazio = document.getElementById("estado-vazio");
@@ -11,6 +14,10 @@ const metaResumoTxt = document.getElementById("meta-resumo-txt");
 const metaTotal = document.getElementById("meta-total");
 const metaTipos = document.getElementById("meta-tipos");
 const listaArquivos = document.getElementById("lista-arquivos");
+
+let ultimoResultado = null;
+let progressoIntervalo = null;
+let progressoAtual = 0;
 
 async function escanear() {
   const pasta = inputPasta.value.trim();
@@ -65,16 +72,48 @@ function baixarPeloNavegador(conteudo, nomeArquivo) {
   URL.revokeObjectURL(url);
 }
 
+// --- "Baixar no Drive" ---
+// Sem OAuth configurado, o navegador não consegue subir o arquivo direto
+// na conta do usuário. Então: baixa o resumo normalmente e abre o Google
+// Drive numa nova aba pra ele soltar o arquivo lá (drag-and-drop).
+function baixarNoDrive() {
+  if (!ultimoResultado) return;
+  baixarPeloNavegador(ultimoResultado.texto_resumo, ultimoResultado.nome_arquivo);
+  window.open("https://drive.google.com/drive/my-drive", "_blank", "noopener");
+}
+
+// --- animação de porcentagem no botão ---
 function iniciarEstadoCarregando() {
   btnEscanear.disabled = true;
   btnEscanear.classList.add("escaneando");
-  btnEscanear.querySelector(".botao-scan__texto").textContent = "Escaneando...";
+  progressoAtual = 0;
+  atualizarProgresso(0);
+
+  clearInterval(progressoIntervalo);
+  progressoIntervalo = setInterval(() => {
+    // sobe rápido no início e desacelera perto de 92% —
+    // o backend não informa progresso real, então isso é uma estimativa visual
+    const passo = progressoAtual < 60 ? 4 : progressoAtual < 80 ? 1.5 : 0.5;
+    progressoAtual = Math.min(progressoAtual + passo, 92);
+    atualizarProgresso(progressoAtual);
+  }, 120);
 }
 
 function finalizarEstadoCarregando() {
-  btnEscanear.disabled = false;
-  btnEscanear.classList.remove("escaneando");
-  btnEscanear.querySelector(".botao-scan__texto").textContent = "Escanear";
+  clearInterval(progressoIntervalo);
+  atualizarProgresso(100);
+
+  setTimeout(() => {
+    btnEscanear.disabled = false;
+    btnEscanear.classList.remove("escaneando");
+    botaoScanProgresso.style.width = "0%";
+    botaoScanTexto.textContent = "Escanear";
+  }, 400);
+}
+
+function atualizarProgresso(valor) {
+  botaoScanProgresso.style.width = `${valor}%`;
+  botaoScanTexto.textContent = `Escaneando... ${Math.round(valor)}%`;
 }
 
 function mostrarErro(texto) {
@@ -88,6 +127,8 @@ function esconderErro() {
 }
 
 function renderizarResultado(dados) {
+  ultimoResultado = dados;
+
   estadoVazio.hidden = true;
   areaResultado.hidden = false;
 
@@ -139,6 +180,7 @@ function renderizarResultado(dados) {
 }
 
 btnEscanear.addEventListener("click", escanear);
+btnDrive.addEventListener("click", baixarNoDrive);
 inputPasta.addEventListener("keydown", (evento) => {
   if (evento.key === "Enter") {
     escanear();

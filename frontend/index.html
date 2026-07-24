@@ -61,8 +61,8 @@
       <p class="campo__dica">Se não for informado, o nome padrão será "resumo.txt".</p>
 
       <button id="btn-escanear" class="botao-scan">
-        <span class="botao-scan__texto">Escanear</span>
-        <span class="botao-scan__linha" aria-hidden="true"></span>
+        <span class="botao-scan__progresso" id="botao-scan-progresso" aria-hidden="true"></span>
+        <span class="botao-scan__texto" id="botao-scan-texto">Escanear</span>
       </button>
     </section>
 
@@ -89,6 +89,7 @@
 
       <div class="resultado__rodape">
         <span class="resultado__selo">Análise concluída</span>
+        <button id="btn-drive" class="botao-drive" type="button">Baixar no Drive</button>
       </div>
     </section>
 
