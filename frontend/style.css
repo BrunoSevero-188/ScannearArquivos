@@ -5,9 +5,9 @@
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--bg);
-  color: var(--ink);
-  font-family: var(--font-body);
+  background: #EEF2F6;
+  color: #17263A;
+  font-family: "Inter", sans-serif;
   position: relative;
 }
 
@@ -17,8 +17,8 @@ body {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(var(--bg-grid-line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--bg-grid-line) 1px, transparent 1px);
+    linear-gradient(#D7E0E8 1px, transparent 1px),
+    linear-gradient(90deg, #D7E0E8 1px, transparent 1px);
   background-size: 32px 32px;
   opacity: 0.6;
   z-index: 0;
@@ -49,8 +49,8 @@ body {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--accent-scan);
-  box-shadow: 0 0 0 4px var(--accent-scan-glow);
+  background: #0891A8;
+  box-shadow: 0 0 0 4px rgba(8, 145, 168, 0.35);
   animation: pulsar 2.2s ease-in-out infinite;
 }
 
@@ -60,7 +60,7 @@ body {
 }
 
 .topo__titulo {
-  font-family: var(--font-display);
+  font-family: "Space Grotesk", sans-serif;
   font-size: 1.9rem;
   font-weight: 700;
   letter-spacing: -0.01em;
@@ -69,7 +69,7 @@ body {
 
 .topo__subtitulo {
   font-size: 0.95rem;
-  color: var(--ink-soft);
+  color: #5B6B7D;
   margin: 0;
 }
 
@@ -88,8 +88,8 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
+  background: #FFFFFF;
+  border: 1px solid #D2DBE3;
   border-radius: 10px;
   padding: 16px;
   box-shadow: 0 1px 2px rgba(23, 38, 58, 0.04);
@@ -106,32 +106,32 @@ body {
   font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--ink-faint);
+  color: #93A2B2;
   font-weight: 500;
 }
 
 .campo__dica {
   font-size: 0.78rem;
-  color: var(--ink-faint);
+  color: #93A2B2;
   margin: -6px 0 0;
   line-height: 1.4;
 }
 
 .campo__input {
-  font-family: var(--font-mono);
+  font-family: "IBM Plex Mono", monospace;
   font-size: 0.9rem;
   padding: 10px 12px;
-  border: 1px solid var(--panel-border);
+  border: 1px solid #D2DBE3;
   border-radius: 6px;
   background: #FBFCFD;
-  color: var(--ink);
+  color: #17263A;
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .campo__input:focus-visible {
-  border-color: var(--accent-scan);
-  box-shadow: 0 0 0 3px var(--accent-scan-glow);
+  border-color: #0891A8;
+  box-shadow: 0 0 0 3px rgba(8, 145, 168, 0.35);
 }
 
 /* --- botão de escanear + barra de progresso --- */
@@ -141,9 +141,9 @@ body {
   overflow: hidden;
   border: none;
   border-radius: 6px;
-  background: var(--ink);
+  background: #17263A;
   color: #fff;
-  font-family: var(--font-display);
+  font-family: "Space Grotesk", sans-serif;
   font-weight: 600;
   font-size: 0.9rem;
   padding: 11px 22px;
@@ -170,7 +170,7 @@ body {
   top: 0;
   bottom: 0;
   width: 0%;
-  background: var(--accent-scan);
+  background: #0891A8;
   opacity: 0.45;
   transition: width 0.15s linear;
   z-index: 0;
@@ -183,9 +183,9 @@ body {
 
 /* --- mensagem de erro --- */
 .mensagem-erro {
-  font-family: var(--font-mono);
+  font-family: "IBM Plex Mono", monospace;
   font-size: 0.85rem;
-  color: var(--accent-warn);
+  color: #C9791C;
   background: #FBF1E4;
   border: 1px solid #EAD3AC;
   border-radius: 6px;
@@ -197,8 +197,8 @@ body {
 .estado-vazio {
   text-align: center;
   padding: 48px 20px;
-  color: var(--ink-faint);
-  border: 1px dashed var(--panel-border);
+  color: #93A2B2;
+  border: 1px dashed #D2DBE3;
   border-radius: 10px;
 }
 
@@ -213,8 +213,8 @@ body {
 /* --- resultado --- */
 .resultado {
   position: relative;
-  background: var(--panel);
-  border: 1px solid var(--panel-border);
+  background: #FFFFFF;
+  border: 1px solid #D2DBE3;
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 1px 2px rgba(23, 38, 58, 0.04);
@@ -226,8 +226,8 @@ body {
   right: 0;
   top: 0;
   height: 2px;
-  background: linear-gradient(90deg, transparent, var(--accent-scan), transparent);
-  box-shadow: 0 0 12px 2px var(--accent-scan-glow);
+  background: linear-gradient(90deg, transparent, #0891A8, transparent);
+  box-shadow: 0 0 12px 2px rgba(8, 145, 168, 0.35);
   opacity: 0;
 }
 
@@ -243,7 +243,7 @@ body {
 
 .resultado__cabecalho {
   padding: 20px 22px;
-  border-bottom: 1px dashed var(--panel-border);
+  border-bottom: 1px dashed #D2DBE3;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -261,23 +261,23 @@ body {
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--ink-faint);
+  color: #93A2B2;
   margin: 0 0 2px;
 }
 
 .resultado__meta-linha dd {
   margin: 0;
-  font-family: var(--font-mono);
+  font-family: "IBM Plex Mono", monospace;
   font-size: 0.85rem;
-  color: var(--ink);
+  color: #17263A;
   word-break: break-all;
 }
 
 .resultado__contador {
   flex-shrink: 0;
-  font-family: var(--font-mono);
+  font-family: "IBM Plex Mono", monospace;
   font-size: 0.75rem;
-  color: var(--accent-scan);
+  color: #0891A8;
   background: rgba(8, 145, 168, 0.08);
   border: 1px solid rgba(8, 145, 168, 0.25);
   border-radius: 999px;
@@ -292,7 +292,7 @@ body {
 }
 
 .arquivo {
-  border-bottom: 1px dashed var(--panel-border);
+  border-bottom: 1px dashed #D2DBE3;
   padding: 16px 22px;
 }
 
@@ -301,9 +301,9 @@ body {
 }
 
 .arquivo__cabecalho {
-  font-family: var(--font-mono);
+  font-family: "IBM Plex Mono", monospace;
   font-size: 0.82rem;
-  color: var(--ink);
+  color: #17263A;
   font-weight: 500;
   margin: 0 0 8px;
   display: flex;
@@ -313,16 +313,16 @@ body {
 
 .arquivo__cabecalho::before {
   content: "›";
-  color: var(--accent-scan);
+  color: #0891A8;
 }
 
 .arquivo__conteudo {
-  font-family: var(--font-mono);
+  font-family: "IBM Plex Mono", monospace;
   font-size: 0.78rem;
   line-height: 1.55;
-  color: var(--ink-soft);
+  color: #5B6B7D;
   background: #FBFCFD;
-  border: 1px solid var(--panel-border);
+  border: 1px solid #D2DBE3;
   border-radius: 6px;
   padding: 12px 14px;
   max-height: 260px;
@@ -343,10 +343,10 @@ body {
 }
 
 .resultado__selo {
-  font-family: var(--font-mono);
+  font-family: "IBM Plex Mono", monospace;
   font-size: 0.78rem;
   font-weight: 500;
-  color: var(--accent-ok);
+  color: #1f8a5c;
   border: 1px solid rgba(31, 138, 92, 0.35);
   background: rgba(31, 138, 92, 0.08);
   border-radius: 999px;
@@ -356,10 +356,10 @@ body {
 
 /* --- botão "Baixar no Drive" --- */
 .botao-drive {
-  font-family: var(--font-mono);
+  font-family: "IBM Plex Mono", monospace;
   font-size: 0.78rem;
   font-weight: 500;
-  color: var(--accent-scan);
+  color: #0891A8;
   background: #fff;
   border: 1px solid rgba(8, 145, 168, 0.4);
   border-radius: 999px;
