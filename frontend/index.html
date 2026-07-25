@@ -23,29 +23,20 @@
 
     <section class="painel-controle" aria-label="Controles do scanner">
       <label class="campo">
-        <span class="campo__rotulo">Caminho que vai ser analisado</span>
-        <input
-          id="input-pasta"
-          class="campo__input"
-          type="text"
-          placeholder="C:\Users\Bruno\Documents\meu-projeto"
-          autocomplete="off"
-          spellcheck="false"
-        />
+        <span class="campo__rotulo">Pasta que vai ser analisada</span>
+        <div class="campo-arquivo">
+          <input
+            id="input-pasta"
+            class="campo__input"
+            type="text"
+            value="Nenhuma pasta selecionada"
+            readonly
+          />
+          <button id="btn-selecionar-pasta" class="botao-secundario" type="button">Escolher pasta</button>
+        </div>
+        <input id="input-arquivos" type="file" webkitdirectory directory multiple hidden />
       </label>
-
-      <label class="campo">
-        <span class="campo__rotulo">Caminho onde vai ser salvo</span>
-        <input
-          id="input-destino-download"
-          class="campo__input"
-          type="text"
-          placeholder="Opcional: deixe em branco para baixar pelo navegador"
-          autocomplete="off"
-          spellcheck="false"
-        />
-      </label>
-      <p class="campo__dica">Se ficar em branco, o resumo é baixado pelo navegador em vez de salvo na pasta analisada.</p>
+      <p class="campo__dica">Na Vercel, a pasta precisa ser selecionada pelo navegador por segurança.</p>
 
       <label class="campo">
         <span class="campo__rotulo">Nome do arquivo</span>
@@ -94,7 +85,7 @@
     </section>
 
     <section id="estado-vazio" class="estado-vazio">
-      <p>Nenhuma análise ainda. Informe uma pasta e clique em <strong>Escanear</strong>.</p>
+      <p>Nenhuma análise ainda. Escolha uma pasta e clique em <strong>Escanear</strong>.</p>
       <p class="estado-vazio__nota">Somente arquivos de texto (.txt, .py, .json, .csv, .md, .html, .css, .js e afins) entram na análise.</p>
     </section>
 

@@ -1,6 +1,7 @@
 const inputPasta = document.getElementById("input-pasta");
-const inputDestinoDownload = document.getElementById("input-destino-download");
+const inputArquivos = document.getElementById("input-arquivos");
 const inputNomeDownload = document.getElementById("input-nome-download");
+const btnSelecionarPasta = document.getElementById("btn-selecionar-pasta");
 const btnEscanear = document.getElementById("btn-escanear");
 const botaoScanProgresso = document.getElementById("botao-scan-progresso");
 const botaoScanTexto = document.getElementById("botao-scan-texto");
@@ -15,46 +16,165 @@ const metaTotal = document.getElementById("meta-total");
 const metaTipos = document.getElementById("meta-tipos");
 const listaArquivos = document.getElementById("lista-arquivos");
 
+const EXTENSOES_TEXTO = new Set([
+  ".txt",
+  ".py",
+  ".json",
+  ".csv",
+  ".md",
+  ".html",
+  ".htm",
+  ".css",
+  ".js",
+  ".xml",
+  ".yaml",
+  ".yml",
+  ".log",
+  ".ini",
+  ".cfg",
+  ".conf",
+  ".sql",
+  ".sh",
+  ".bat",
+  ".ts",
+  ".jsx",
+  ".tsx",
+  ".java",
+  ".c",
+  ".cpp",
+  ".h",
+  ".env",
+  ".toml",
+  ".ps1",
+]);
+
+const LIMITE_CARACTERES_POR_ARQUIVO = 20000;
+
 let ultimoResultado = null;
 let progressoIntervalo = null;
 let progressoAtual = 0;
 
+function definirNomeArquivo(filename) {
+  let nome = (filename || "").trim().replace(/^"+|"+$/g, "");
+  if (!nome) nome = "resumo";
+  if (!nome.toLowerCase().endsWith(".txt")) nome += ".txt";
+  return nome;
+}
+
+function obterExtensao(nomeArquivo) {
+  const indice = nomeArquivo.lastIndexOf(".");
+  return indice >= 0 ? nomeArquivo.slice(indice).toLowerCase() : "";
+}
+
+function ehArquivoDeTexto(arquivo) {
+  return EXTENSOES_TEXTO.has(obterExtensao(arquivo.name));
+}
+
+function obterCaminhoRelativo(arquivo) {
+  return arquivo.webkitRelativePath || arquivo.name;
+}
+
+function obterNomePasta(files) {
+  const primeiro = files[0];
+  const caminho = primeiro ? obterCaminhoRelativo(primeiro) : "";
+  return caminho.split("/")[0] || "Pasta selecionada";
+}
+
+async function lerConteudo(arquivo) {
+  try {
+    let conteudo = await arquivo.text();
+    if (conteudo.length > LIMITE_CARACTERES_POR_ARQUIVO) {
+      conteudo =
+        conteudo.slice(0, LIMITE_CARACTERES_POR_ARQUIVO) +
+        `\n\n[...conteudo truncado - arquivo tem ${conteudo.length} caracteres...]`;
+    }
+    return conteudo;
+  } catch (erro) {
+    return `[Nao foi possivel ler o arquivo: ${erro.message || erro}]`;
+  }
+}
+
+function montarTextoResumo({ pastaPai, nomeArquivo, arquivos, contagemPorExtensao }) {
+  const linhas = [];
+  linhas.push(`Caminho da pasta "pai" que foi analisado: ${pastaPai}`);
+  linhas.push(`Nome do arquivo de resumo: ${nomeArquivo}`);
+  linhas.push("");
+  linhas.push(`Quantidade de arquivos de texto encontrados: ${arquivos.length}`);
+  linhas.push("Quebra por tipo (extensao):");
+
+  const extensoes = Object.keys(contagemPorExtensao).sort();
+  if (extensoes.length === 0) {
+    linhas.push("- Nenhuma extensao encontrada");
+  } else {
+    for (const extensao of extensoes) {
+      linhas.push(`- ${extensao}: ${contagemPorExtensao[extensao]}`);
+    }
+  }
+
+  linhas.push("");
+
+  for (const item of arquivos) {
+    const nome = item.caminho.split("/").pop();
+    linhas.push(`Caminho do (${nome}):`);
+    linhas.push(item.conteudo);
+    linhas.push("");
+  }
+
+  linhas.push("Analise concluida");
+  return linhas.join("\n");
+}
+
 async function escanear() {
-  const pasta = inputPasta.value.trim();
-  const destino = inputDestinoDownload.value.trim();
-  const filename = inputNomeDownload.value.trim();
+  const files = Array.from(inputArquivos.files || []);
+  const nomeArquivo = definirNomeArquivo(inputNomeDownload.value);
   esconderErro();
 
-  if (!pasta) {
-    mostrarErro("Informe o caminho de uma pasta antes de escanear.");
+  if (files.length === 0) {
+    mostrarErro("Escolha uma pasta antes de escanear.");
     return;
   }
 
   iniciarEstadoCarregando();
 
   try {
-    const resposta = await fetch("/api/scan", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pasta, destino, filename }),
+    const pastaPai = obterNomePasta(files);
+    const arquivosTexto = files
+      .filter((arquivo) => ehArquivoDeTexto(arquivo) && arquivo.name !== nomeArquivo)
+      .sort((a, b) => obterCaminhoRelativo(a).localeCompare(obterCaminhoRelativo(b)));
+
+    const arquivos = [];
+    const contagemPorExtensao = {};
+
+    for (const arquivo of arquivosTexto) {
+      const extensao = obterExtensao(arquivo.name) || "(sem extensao)";
+      contagemPorExtensao[extensao] = (contagemPorExtensao[extensao] || 0) + 1;
+      arquivos.push({
+        caminho: obterCaminhoRelativo(arquivo),
+        conteudo: await lerConteudo(arquivo),
+      });
+    }
+
+    const textoResumo = montarTextoResumo({
+      pastaPai,
+      nomeArquivo,
+      arquivos,
+      contagemPorExtensao,
     });
 
-    const dados = await resposta.json();
+    const resultado = {
+      pasta_pai: pastaPai,
+      total_arquivos: arquivos.length,
+      contagem_por_extensao: contagemPorExtensao,
+      arquivos,
+      nome_arquivo: nomeArquivo,
+      texto_resumo: textoResumo,
+      salvo_em: null,
+    };
 
-    if (!resposta.ok) {
-      mostrarErro(dados.erro || "Não foi possível concluir o scan.");
-      return;
-    }
-
-    renderizarResultado(dados);
-
-    // Se nenhum destino foi informado, baixa o resumo pelo navegador.
-    // Se um destino foi informado, o backend já salvou o arquivo lá.
-    if (!dados.salvo_em) {
-      baixarPeloNavegador(dados.texto_resumo, dados.nome_arquivo);
-    }
+    renderizarResultado(resultado);
+    baixarPeloNavegador(textoResumo, nomeArquivo);
   } catch (erro) {
-    mostrarErro("Falha de conexão com o servidor. O backend.py está rodando?");
+    mostrarErro(`Nao foi possivel concluir o scan: ${erro.message || erro}`);
   } finally {
     finalizarEstadoCarregando();
   }
@@ -72,17 +192,12 @@ function baixarPeloNavegador(conteudo, nomeArquivo) {
   URL.revokeObjectURL(url);
 }
 
-// --- "Baixar no Drive" ---
-// Sem OAuth configurado, o navegador não consegue subir o arquivo direto
-// na conta do usuário. Então: baixa o resumo normalmente e abre o Google
-// Drive numa nova aba pra ele soltar o arquivo lá (drag-and-drop).
 function baixarNoDrive() {
   if (!ultimoResultado) return;
   baixarPeloNavegador(ultimoResultado.texto_resumo, ultimoResultado.nome_arquivo);
   window.open("https://drive.google.com/drive/my-drive", "_blank", "noopener");
 }
 
-// --- animação de porcentagem no botão ---
 function iniciarEstadoCarregando() {
   btnEscanear.disabled = true;
   btnEscanear.classList.add("escaneando");
@@ -91,8 +206,6 @@ function iniciarEstadoCarregando() {
 
   clearInterval(progressoIntervalo);
   progressoIntervalo = setInterval(() => {
-    // sobe rápido no início e desacelera perto de 92% —
-    // o backend não informa progresso real, então isso é uma estimativa visual
     const passo = progressoAtual < 60 ? 4 : progressoAtual < 80 ? 1.5 : 0.5;
     progressoAtual = Math.min(progressoAtual + passo, 92);
     atualizarProgresso(progressoAtual);
@@ -133,9 +246,7 @@ function renderizarResultado(dados) {
   areaResultado.hidden = false;
 
   metaPastaPai.textContent = dados.pasta_pai;
-  metaResumoTxt.textContent = dados.salvo_em
-    ? `Salvo em: ${dados.salvo_em}`
-    : `Baixado pelo navegador como "${dados.nome_arquivo}"`;
+  metaResumoTxt.textContent = `Baixado pelo navegador como "${dados.nome_arquivo}"`;
   metaTotal.textContent = `${dados.total_arquivos} arquivo(s) de texto`;
 
   const contagem = dados.contagem_por_extensao || {};
@@ -173,15 +284,20 @@ function renderizarResultado(dados) {
     listaArquivos.appendChild(bloco);
   }
 
-  // dispara a animação da linha de varredura a cada novo resultado
   areaResultado.classList.remove("varrendo");
-  void areaResultado.offsetWidth; // força reflow pra reiniciar a animação
+  void areaResultado.offsetWidth;
   areaResultado.classList.add("varrendo");
 }
 
+btnSelecionarPasta.addEventListener("click", () => inputArquivos.click());
+inputArquivos.addEventListener("change", () => {
+  const files = Array.from(inputArquivos.files || []);
+  inputPasta.value =
+    files.length > 0 ? `${obterNomePasta(files)} (${files.length} arquivo(s))` : "Nenhuma pasta selecionada";
+});
 btnEscanear.addEventListener("click", escanear);
 btnDrive.addEventListener("click", baixarNoDrive);
-inputPasta.addEventListener("keydown", (evento) => {
+inputNomeDownload.addEventListener("keydown", (evento) => {
   if (evento.key === "Enter") {
     escanear();
   }

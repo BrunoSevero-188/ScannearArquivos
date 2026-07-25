@@ -134,6 +134,37 @@ body {
   box-shadow: 0 0 0 3px rgba(8, 145, 168, 0.35);
 }
 
+.campo-arquivo {
+  display: flex;
+  gap: 10px;
+}
+
+.campo-arquivo .campo__input {
+  flex: 1;
+}
+
+.botao-secundario {
+  flex-shrink: 0;
+  border: 1px solid rgba(8, 145, 168, 0.4);
+  border-radius: 6px;
+  background: #fff;
+  color: #0891A8;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0 14px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.botao-secundario:hover {
+  background: rgba(8, 145, 168, 0.08);
+}
+
+.botao-secundario:active {
+  transform: scale(0.98);
+}
+
 /* --- botão de escanear + barra de progresso --- */
 .botao-scan {
   position: relative;
@@ -407,6 +438,14 @@ body {
 
   .painel-controle {
     padding: 14px;
+  }
+
+  .campo-arquivo {
+    flex-direction: column;
+  }
+
+  .botao-secundario {
+    min-height: 40px;
   }
 
   .resultado__cabecalho {
