@@ -1,7 +1,9 @@
 const inputPasta = document.getElementById("input-pasta");
 const inputArquivos = document.getElementById("input-arquivos");
+const inputDestinoDownload = document.getElementById("input-destino-download");
 const inputNomeDownload = document.getElementById("input-nome-download");
 const btnSelecionarPasta = document.getElementById("btn-selecionar-pasta");
+const btnSelecionarDestino = document.getElementById("btn-selecionar-destino");
 const btnEscanear = document.getElementById("btn-escanear");
 const botaoScanProgresso = document.getElementById("botao-scan-progresso");
 const botaoScanTexto = document.getElementById("botao-scan-texto");
@@ -51,6 +53,7 @@ const EXTENSOES_TEXTO = new Set([
 const LIMITE_CARACTERES_POR_ARQUIVO = 20000;
 
 let ultimoResultado = null;
+let destinoHandle = null;
 let progressoIntervalo = null;
 let progressoAtual = 0;
 
@@ -161,6 +164,8 @@ async function escanear() {
       contagemPorExtensao,
     });
 
+    const salvoEm = await salvarResumo(textoResumo, nomeArquivo);
+
     const resultado = {
       pasta_pai: pastaPai,
       total_arquivos: arquivos.length,
@@ -168,15 +173,33 @@ async function escanear() {
       arquivos,
       nome_arquivo: nomeArquivo,
       texto_resumo: textoResumo,
-      salvo_em: null,
+      salvo_em: salvoEm,
     };
 
     renderizarResultado(resultado);
-    baixarPeloNavegador(textoResumo, nomeArquivo);
   } catch (erro) {
     mostrarErro(`Nao foi possivel concluir o scan: ${erro.message || erro}`);
   } finally {
     finalizarEstadoCarregando();
+  }
+}
+
+async function salvarResumo(conteudo, nomeArquivo) {
+  if (!destinoHandle) {
+    baixarPeloNavegador(conteudo, nomeArquivo);
+    return null;
+  }
+
+  try {
+    const arquivoHandle = await destinoHandle.getFileHandle(nomeArquivo, { create: true });
+    const writable = await arquivoHandle.createWritable();
+    await writable.write(conteudo);
+    await writable.close();
+    return `${destinoHandle.name}/${nomeArquivo}`;
+  } catch (erro) {
+    baixarPeloNavegador(conteudo, nomeArquivo);
+    mostrarErro("Nao foi possivel salvar na pasta escolhida. O resumo foi baixado pelo navegador.");
+    return null;
   }
 }
 
@@ -246,7 +269,9 @@ function renderizarResultado(dados) {
   areaResultado.hidden = false;
 
   metaPastaPai.textContent = dados.pasta_pai;
-  metaResumoTxt.textContent = `Baixado pelo navegador como "${dados.nome_arquivo}"`;
+  metaResumoTxt.textContent = dados.salvo_em
+    ? `Salvo em: ${dados.salvo_em}`
+    : `Baixado pelo navegador como "${dados.nome_arquivo}"`;
   metaTotal.textContent = `${dados.total_arquivos} arquivo(s) de texto`;
 
   const contagem = dados.contagem_por_extensao || {};
@@ -290,13 +315,36 @@ function renderizarResultado(dados) {
 }
 
 btnSelecionarPasta.addEventListener("click", () => inputArquivos.click());
+btnSelecionarDestino.addEventListener("click", async () => {
+  esconderErro();
+
+  if (!window.showDirectoryPicker) {
+    destinoHandle = null;
+    mostrarErro("Seu navegador nao permite escolher uma pasta de destino. O arquivo sera baixado normalmente.");
+    return;
+  }
+
+  try {
+    destinoHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+    inputDestinoDownload.value = destinoHandle.name;
+  } catch (erro) {
+    if (erro.name !== "AbortError") {
+      mostrarErro(`Nao foi possivel escolher a pasta de destino: ${erro.message || erro}`);
+    }
+  }
+});
 inputArquivos.addEventListener("change", () => {
   const files = Array.from(inputArquivos.files || []);
-  inputPasta.value =
-    files.length > 0 ? `${obterNomePasta(files)} (${files.length} arquivo(s))` : "Nenhuma pasta selecionada";
+  inputPasta.value = files.length > 0 ? `${obterNomePasta(files)} (${files.length} arquivo(s))` : "";
 });
 btnEscanear.addEventListener("click", escanear);
 btnDrive.addEventListener("click", baixarNoDrive);
+inputPasta.addEventListener("input", () => {
+  inputArquivos.value = "";
+});
+inputDestinoDownload.addEventListener("input", () => {
+  destinoHandle = null;
+});
 inputNomeDownload.addEventListener("keydown", (evento) => {
   if (evento.key === "Enter") {
     escanear();

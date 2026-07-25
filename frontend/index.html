@@ -29,14 +29,31 @@
             id="input-pasta"
             class="campo__input"
             type="text"
-            value="Nenhuma pasta selecionada"
-            readonly
+            placeholder="C:\Users\Bruno\Documents\meu-projeto"
+            autocomplete="off"
+            spellcheck="false"
           />
-          <button id="btn-selecionar-pasta" class="botao-secundario" type="button">Escolher pasta</button>
+          <button id="btn-selecionar-pasta" class="botao-secundario" type="button">Buscar</button>
         </div>
         <input id="input-arquivos" type="file" webkitdirectory directory multiple hidden />
       </label>
-      <p class="campo__dica">Na Vercel, a pasta precisa ser selecionada pelo navegador por segurança.</p>
+      <p class="campo__dica">Na Vercel, digitar o caminho não libera acesso aos arquivos; use Buscar se não souber ou quiser selecionar pelo navegador.</p>
+
+      <label class="campo">
+        <span class="campo__rotulo">Caminho onde vai ser salvo</span>
+        <div class="campo-arquivo">
+          <input
+            id="input-destino-download"
+            class="campo__input"
+            type="text"
+            placeholder="Opcional: deixe em branco para baixar pelo navegador"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button id="btn-selecionar-destino" class="botao-secundario" type="button">Buscar</button>
+        </div>
+      </label>
+      <p class="campo__dica">Quando o navegador permitir, o botão Buscar salva direto na pasta escolhida; caso contrário, o resumo será baixado.</p>
 
       <label class="campo">
         <span class="campo__rotulo">Nome do arquivo</span>

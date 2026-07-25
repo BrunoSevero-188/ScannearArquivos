@@ -22,10 +22,11 @@ Isso e necessario porque um site publicado na Vercel nao pode acessar caminhos l
 ## Como usar na Vercel
 1. Publique o projeto normalmente na Vercel.
 2. Abra o site gerado.
-3. Clique em **Escolher pasta**.
-4. Escolha a pasta que sera analisada.
-5. Clique em **Escanear**.
-6. O navegador baixa o resumo automaticamente.
+3. No primeiro campo, digite o caminho apenas como referencia ou clique em **Buscar** para escolher a pasta que sera analisada.
+4. No segundo campo, opcionalmente clique em **Buscar** para escolher onde salvar o resumo, quando o navegador permitir.
+5. Informe o nome do arquivo ou deixe em branco para usar `resumo.txt`.
+6. Clique em **Escanear**.
+7. O resumo sera salvo na pasta escolhida ou baixado automaticamente pelo navegador.
 
 ## Como rodar localmente
 Abra `frontend/index.html` no navegador ou sirva a pasta `frontend/` com qualquer servidor estatico.
