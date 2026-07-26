@@ -327,6 +327,7 @@ btnSelecionarDestino.addEventListener("click", async () => {
   try {
     destinoHandle = await window.showDirectoryPicker({ mode: "readwrite" });
     statusDestino.textContent = destinoHandle.name;
+    document.getElementById("campo-destino").classList.add("selecionado");
   } catch (erro) {
     if (erro.name !== "AbortError") {
       mostrarErro(`Nao foi possivel escolher a pasta de destino: ${erro.message || erro}`);
@@ -335,9 +336,14 @@ btnSelecionarDestino.addEventListener("click", async () => {
 });
 inputArquivos.addEventListener("change", () => {
   const files = Array.from(inputArquivos.files || []);
-  statusPasta.textContent = files.length > 0
-    ? `${obterNomePasta(files)} (${files.length} arquivo(s))`
-    : "Nenhuma pasta selecionada";
+  const campoPasta = document.getElementById("campo-pasta");
+  if (files.length > 0) {
+    statusPasta.textContent = `${obterNomePasta(files)} (${files.length} arquivo(s))`;
+    campoPasta.classList.add("selecionado");
+  } else {
+    statusPasta.textContent = "Nenhuma pasta selecionada";
+    campoPasta.classList.remove("selecionado");
+  }
 });
 btnEscanear.addEventListener("click", escanear);
 btnDrive.addEventListener("click", baixarNoDrive);

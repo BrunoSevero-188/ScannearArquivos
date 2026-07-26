@@ -143,6 +143,24 @@ body {
   flex: 1;
 }
 
+/* --- antes de selecionar: só o botão aparece, ocupando a largura toda --- */
+.campo-arquivo .campo__status {
+  display: none;
+}
+
+.campo-arquivo .botao-secundario {
+  flex: 1;
+}
+
+/* --- depois de selecionado: status + botão lado a lado --- */
+.campo-arquivo.selecionado .campo__status {
+  display: flex;
+}
+
+.campo-arquivo.selecionado .botao-secundario {
+  flex: none;
+}
+
 /* --- texto de status (substitui os inputs de pasta/destino) --- */
 .campo__status {
   flex: 1;
@@ -153,7 +171,6 @@ body {
   border-radius: 6px;
   background: #FBFCFD;
   color: #93A2B2;
-  display: flex;
   align-items: center;
   overflow: hidden;
   text-overflow: ellipsis;
