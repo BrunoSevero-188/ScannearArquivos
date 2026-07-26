@@ -25,31 +25,17 @@
       <label class="campo">
         <span class="campo__rotulo">Pasta que vai ser analisada</span>
         <div class="campo-arquivo">
-          <input
-            id="input-pasta"
-            class="campo__input"
-            type="text"
-            placeholder="C:\Users\Bruno\Documents\meu-projeto"
-            autocomplete="off"
-            spellcheck="false"
-          />
+          <span id="status-pasta" class="campo__status">Nenhuma pasta selecionada</span>
           <button id="btn-selecionar-pasta" class="botao-secundario" type="button">Buscar</button>
         </div>
         <input id="input-arquivos" type="file" webkitdirectory directory multiple hidden />
       </label>
-      <p class="campo__dica">Na Vercel, digitar o caminho não libera acesso aos arquivos; use Buscar se não souber ou quiser selecionar pelo navegador.</p>
+      <p class="campo__dica">Clique em Buscar para escolher a pasta que será analisada.</p>
 
       <label class="campo">
         <span class="campo__rotulo">Caminho onde vai ser salvo</span>
         <div class="campo-arquivo">
-          <input
-            id="input-destino-download"
-            class="campo__input"
-            type="text"
-            placeholder="Opcional: deixe em branco para baixar pelo navegador"
-            autocomplete="off"
-            spellcheck="false"
-          />
+          <span id="status-destino" class="campo__status">Opcional: deixe em branco para baixar pelo navegador</span>
           <button id="btn-selecionar-destino" class="botao-secundario" type="button">Buscar</button>
         </div>
       </label>

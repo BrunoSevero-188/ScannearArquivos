@@ -143,6 +143,23 @@ body {
   flex: 1;
 }
 
+/* --- texto de status (substitui os inputs de pasta/destino) --- */
+.campo__status {
+  flex: 1;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.9rem;
+  padding: 10px 12px;
+  border: 1px dashed #D2DBE3;
+  border-radius: 6px;
+  background: #FBFCFD;
+  color: #93A2B2;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .botao-secundario {
   flex-shrink: 0;
   border: 1px solid rgba(8, 145, 168, 0.4);
@@ -521,7 +538,8 @@ body {
     font-size: 1.05rem;
   }
 
-  .campo__input {
+  .campo__input,
+  .campo__status {
     font-size: 1.3rem;
     padding: 16px 18px;
   }

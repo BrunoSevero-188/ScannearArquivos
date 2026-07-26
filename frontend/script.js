@@ -1,6 +1,6 @@
-const inputPasta = document.getElementById("input-pasta");
+const statusPasta = document.getElementById("status-pasta");
 const inputArquivos = document.getElementById("input-arquivos");
-const inputDestinoDownload = document.getElementById("input-destino-download");
+const statusDestino = document.getElementById("status-destino");
 const inputNomeDownload = document.getElementById("input-nome-download");
 const btnSelecionarPasta = document.getElementById("btn-selecionar-pasta");
 const btnSelecionarDestino = document.getElementById("btn-selecionar-destino");
@@ -326,7 +326,7 @@ btnSelecionarDestino.addEventListener("click", async () => {
 
   try {
     destinoHandle = await window.showDirectoryPicker({ mode: "readwrite" });
-    inputDestinoDownload.value = destinoHandle.name;
+    statusDestino.textContent = destinoHandle.name;
   } catch (erro) {
     if (erro.name !== "AbortError") {
       mostrarErro(`Nao foi possivel escolher a pasta de destino: ${erro.message || erro}`);
@@ -335,16 +335,12 @@ btnSelecionarDestino.addEventListener("click", async () => {
 });
 inputArquivos.addEventListener("change", () => {
   const files = Array.from(inputArquivos.files || []);
-  inputPasta.value = files.length > 0 ? `${obterNomePasta(files)} (${files.length} arquivo(s))` : "";
+  statusPasta.textContent = files.length > 0
+    ? `${obterNomePasta(files)} (${files.length} arquivo(s))`
+    : "Nenhuma pasta selecionada";
 });
 btnEscanear.addEventListener("click", escanear);
 btnDrive.addEventListener("click", baixarNoDrive);
-inputPasta.addEventListener("input", () => {
-  inputArquivos.value = "";
-});
-inputDestinoDownload.addEventListener("input", () => {
-  destinoHandle = null;
-});
 inputNomeDownload.addEventListener("keydown", (evento) => {
   if (evento.key === "Enter") {
     escanear();
