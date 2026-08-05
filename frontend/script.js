@@ -51,11 +51,14 @@ const EXTENSOES_TEXTO = new Set([
 ]);
 
 const LIMITE_CARACTERES_POR_ARQUIVO = 20000;
+const CONCORRENCIA_LEITURA = 4; // nº de arquivos lidos em paralelo
+const ARQUIVOS_POR_PAGINA = 200; // quantos arquivos são renderizados por vez
 
 let ultimoResultado = null;
 let destinoHandle = null;
 let progressoIntervalo = null;
 let progressoAtual = 0;
+let arquivosExibidos = 0; // contador de arquivos já renderizados (paginação)
 
 function definirNomeArquivo(filename) {
   let nome = (filename || "").trim().replace(/^"+|"+$/g, "");
@@ -85,16 +88,44 @@ function obterNomePasta(files) {
 
 async function lerConteudo(arquivo) {
   try {
-    let conteudo = await arquivo.text();
-    if (conteudo.length > LIMITE_CARACTERES_POR_ARQUIVO) {
-      conteudo =
-        conteudo.slice(0, LIMITE_CARACTERES_POR_ARQUIVO) +
-        `\n\n[...conteudo truncado - arquivo tem ${conteudo.length} caracteres...]`;
+    const tamanhoTotal = arquivo.size;
+    if (tamanhoTotal > LIMITE_CARACTERES_POR_ARQUIVO) {
+      const preview = arquivo.slice(0, LIMITE_CARACTERES_POR_ARQUIVO * 2);
+      const conteudo = await preview.text();
+      const cortado = conteudo.slice(0, LIMITE_CARACTERES_POR_ARQUIVO);
+      return cortado + "\n\n[...conteudo truncado - arquivo tem " + tamanhoTotal + " bytes...]";
     }
-    return conteudo;
+    return await arquivo.text();
   } catch (erro) {
-    return `[Nao foi possivel ler o arquivo: ${erro.message || erro}]`;
+    return "[Nao foi possivel ler o arquivo: " + (erro.message || erro) + "]";
   }
+}
+
+// Lê vários arquivos em paralelo, respeitando um limite de concorrência.
+// A ordem dos resultados é preservada (igual à ordem da lista de entrada).
+// onProgresso(concluidos, total) é chamado a cada arquivo lido.
+async function lerArquivosComProgresso(arquivos, onProgresso) {
+  const resultados = new Array(arquivos.length);
+  let concluidos = 0;
+  let proximo = 0;
+
+  async function trabalhador() {
+    while (true) {
+      const indice = proximo++;
+      if (indice >= arquivos.length) break;
+      resultados[indice] = await lerConteudo(arquivos[indice]);
+      concluidos++;
+      if (onProgresso) onProgresso(concluidos, arquivos.length);
+    }
+  }
+
+  const quantidade = Math.min(CONCORRENCIA_LEITURA, arquivos.length);
+  const workers = [];
+  for (let i = 0; i < quantidade; i++) {
+    workers.push(trabalhador());
+  }
+  await Promise.all(workers);
+  return resultados;
 }
 
 function montarTextoResumo({ pastaPai, nomeArquivo, arquivos, contagemPorExtensao }) {
@@ -145,17 +176,20 @@ async function escanear() {
       .filter((arquivo) => ehArquivoDeTexto(arquivo) && arquivo.name !== nomeArquivo)
       .sort((a, b) => obterCaminhoRelativo(a).localeCompare(obterCaminhoRelativo(b)));
 
-    const arquivos = [];
     const contagemPorExtensao = {};
-
     for (const arquivo of arquivosTexto) {
       const extensao = obterExtensao(arquivo.name) || "(sem extensao)";
       contagemPorExtensao[extensao] = (contagemPorExtensao[extensao] || 0) + 1;
-      arquivos.push({
-        caminho: obterCaminhoRelativo(arquivo),
-        conteudo: await lerConteudo(arquivo),
-      });
     }
+
+    const conteudos = await lerArquivosComProgresso(arquivosTexto, (concluidos, total) => {
+      atualizarProgressoTexto(concluidos, total);
+    });
+
+    const arquivos = arquivosTexto.map((arquivo, indice) => ({
+      caminho: obterCaminhoRelativo(arquivo),
+      conteudo: conteudos[indice],
+    }));
 
     const textoResumo = montarTextoResumo({
       pastaPai,
@@ -225,19 +259,22 @@ function iniciarEstadoCarregando() {
   btnEscanear.disabled = true;
   btnEscanear.classList.add("escaneando");
   progressoAtual = 0;
-  atualizarProgresso(0);
+  botaoScanProgresso.style.width = "0%";
+  botaoScanTexto.textContent = "Escaneando... 0%";
+}
 
-  clearInterval(progressoIntervalo);
-  progressoIntervalo = setInterval(() => {
-    const passo = progressoAtual < 60 ? 4 : progressoAtual < 80 ? 1.5 : 0.5;
-    progressoAtual = Math.min(progressoAtual + passo, 92);
-    atualizarProgresso(progressoAtual);
-  }, 120);
+// Progresso real durante a leitura: mostra a contagem de arquivos lidos.
+function atualizarProgressoTexto(concluidos, total) {
+  const percentual = total > 0 ? Math.round((concluidos / total) * 100) : 0;
+  progressoAtual = percentual;
+  botaoScanProgresso.style.width = `${percentual}%`;
+  botaoScanTexto.textContent = `Escaneando... ${concluidos}/${total} (${percentual}%)`;
 }
 
 function finalizarEstadoCarregando() {
   clearInterval(progressoIntervalo);
-  atualizarProgresso(100);
+  botaoScanProgresso.style.width = "100%";
+  botaoScanTexto.textContent = "Escaneando... 100%";
 
   setTimeout(() => {
     btnEscanear.disabled = false;
@@ -245,11 +282,6 @@ function finalizarEstadoCarregando() {
     botaoScanProgresso.style.width = "0%";
     botaoScanTexto.textContent = "Escanear";
   }, 400);
-}
-
-function atualizarProgresso(valor) {
-  botaoScanProgresso.style.width = `${valor}%`;
-  botaoScanTexto.textContent = `Escaneando... ${Math.round(valor)}%`;
 }
 
 function mostrarErro(texto) {
@@ -282,15 +314,33 @@ function renderizarResultado(dados) {
   metaTipos.textContent = tipos ? `Tipos: ${tipos}` : "Tipos: -";
 
   listaArquivos.innerHTML = "";
+  arquivosExibidos = 0;
 
   if (dados.arquivos.length === 0) {
     const vazio = document.createElement("p");
     vazio.className = "arquivo__conteudo";
     vazio.textContent = "Nenhum arquivo de texto encontrado nessa pasta.";
     listaArquivos.appendChild(vazio);
+  } else {
+    renderizarMaisArquivos();
   }
 
-  for (const arquivo of dados.arquivos) {
+  areaResultado.classList.remove("varrendo");
+  void areaResultado.offsetWidth;
+  areaResultado.classList.add("varrendo");
+}
+
+// Renderiza a próxima "página" de arquivos na lista. Evita criar milhares de nós
+// DOM de uma vez, o que era uma das causas da lentidão/interface travando.
+function renderizarMaisArquivos() {
+  const dados = ultimoResultado;
+  if (!dados) return;
+
+  const lista = dados.arquivos;
+  const fim = Math.min(arquivosExibidos + ARQUIVOS_POR_PAGINA, lista.length);
+
+  for (let i = arquivosExibidos; i < fim; i++) {
+    const arquivo = lista[i];
     const nomeArquivo = arquivo.caminho.split(/[\\/]/).pop();
 
     const bloco = document.createElement("article");
@@ -309,9 +359,21 @@ function renderizarResultado(dados) {
     listaArquivos.appendChild(bloco);
   }
 
-  areaResultado.classList.remove("varrendo");
-  void areaResultado.offsetWidth;
-  areaResultado.classList.add("varrendo");
+  arquivosExibidos = fim;
+
+  // Remove o botão antigo de "mostrar mais", se houver.
+  const botaoAntigo = document.getElementById("botao-mostrar-mais");
+  if (botaoAntigo) botaoAntigo.remove();
+
+  if (arquivosExibidos < lista.length) {
+    const botao = document.createElement("button");
+    botao.id = "botao-mostrar-mais";
+    botao.className = "botao-mostrar-mais";
+    botao.type = "button";
+    botao.textContent = `Mostrar mais (${lista.length - arquivosExibidos} restantes)`;
+    botao.addEventListener("click", renderizarMaisArquivos);
+    listaArquivos.appendChild(botao);
+  }
 }
 
 btnSelecionarPasta.addEventListener("click", () => inputArquivos.click());

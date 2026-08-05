@@ -1,12 +1,17 @@
 import http.server
 import socketserver
 import json
+import os
 from pathlib import Path
 from datetime import datetime
 from urllib.parse import urlparse
 
 PORTA = 8000
 PASTA_FRONTEND = Path(__file__).parent / "frontend"
+
+# Pastas que não devem ser varridas (geralmente não interessam para o resumo)
+PASTAS_IGNORADAS = {".git", "node_modules", "__pycache__", "venv", ".venv",
+                    "dist", "build", ".idea", ".vscode", ".next", ".cache"}
 
 # Extensões consideradas "arquivo de texto" -> só essas entram na análise
 EXTENSOES_TEXTO = {".txt", ".py", ".json", ".csv", ".md", ".html", ".htm", ".css", ".js", ".xml",
@@ -21,16 +26,23 @@ def eh_arquivo_de_texto(caminho: Path) -> bool:
 
 
 def ler_conteudo(caminho: Path) -> str:
+    # Se o arquivo passar do limite, lê apenas os primeiros bytes em vez do arquivo inteiro.
     try:
+        tamanho_total = caminho.stat().st_size
+    except Exception as e:
+        return f"[Não foi possível ler o arquivo: {e}]"
+
+    try:
+        if tamanho_total > LIMITE_CARACTERES_POR_ARQUIVO:
+            # Lê só um pequeno trecho (prefixo) para não travar a análise
+            with open(caminho, "r", encoding="utf-8", errors="replace") as f:
+                conteudo = f.read(LIMITE_CARACTERES_POR_ARQUIVO)
+            return conteudo + "[...conteúdo truncado...]"
+
         conteudo = caminho.read_text(encoding="utf-8", errors="replace")
     except Exception as e:
         return f"[Não foi possível ler o arquivo: {e}]"
 
-    if len(conteudo) > LIMITE_CARACTERES_POR_ARQUIVO:
-        conteudo = (
-            conteudo[:LIMITE_CARACTERES_POR_ARQUIVO]
-            + f"\n\n[...conteúdo truncado - arquivo tem {len(conteudo)} caracteres...]"
-        )
     return conteudo
 
 
@@ -108,8 +120,21 @@ def escanear_pasta(caminho_pasta: str, destino: str = "", filename: str = "") ->
     arquivos = []
     contagem_por_extensao = {}
 
-    for caminho in sorted(pasta.rglob("*")):
-        if caminho.is_file() and eh_arquivo_de_texto(caminho):
+    # Usa os.walk para poder pular (prunear) pastas irrelevantes,
+    # evitando varrer node_modules, .git, __pycache__ etc.
+    for raiz, subpastas, arquivos_pasta in os.walk(pasta):
+        # Remove do walk as pastas irrelevantes (também evita entrar nelas)
+        subpastas[:] = [
+            s for s in subpastas
+            if s not in PASTAS_IGNORADAS and s.lower() not in PASTAS_IGNORADAS
+        ]
+
+        for nome in arquivos_pasta:
+            caminho = Path(raiz) / nome
+
+            if not eh_arquivo_de_texto(caminho):
+                continue
+
             # ignora qualquer arquivo com o mesmo nome do resumo que vai ser gerado,
             # pra não reanalisar um resumo antigo que esteja dentro da pasta
             if caminho.name == nome_arquivo:

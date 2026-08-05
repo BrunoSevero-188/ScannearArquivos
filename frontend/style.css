@@ -397,6 +397,29 @@ body {
   margin: 0;
 }
 
+/* --- botão "Mostrar mais" (paginação de resultados) --- */
+.botao-mostrar-mais {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #0891A8;
+  background: #fff;
+  border: 1px dashed rgba(8, 145, 168, 0.5);
+  border-radius: 6px;
+  padding: 12px 18px;
+  margin: 16px 22px;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.botao-mostrar-mais:hover {
+  background: rgba(8, 145, 168, 0.08);
+}
+
+.botao-mostrar-mais:active {
+  transform: scale(0.98);
+}
+
 /* --- rodapé --- */
 .resultado__rodape {
   padding: 16px 22px;
@@ -518,6 +541,28 @@ body {
   .painel-controle {
     max-width: 480px;
     margin: 0 auto;
+  }
+
+  /* Reajuste do tamanho dos botões na versão desktop */
+  .botao-secundario {
+    font-size: 0.9rem;
+    padding: 0 18px;
+    min-height: 44px;
+  }
+
+  .botao-scan {
+    font-size: 1.05rem;
+    padding: 14px 28px;
+  }
+
+  .botao-mostrar-mais {
+    font-size: 0.9rem;
+    padding: 14px 22px;
+  }
+
+  .botao-drive {
+    font-size: 0.9rem;
+    padding: 9px 20px;
   }
 }
 
