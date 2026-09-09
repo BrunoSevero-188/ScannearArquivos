@@ -11,6 +11,10 @@
     {
       "source": "/script.js",
       "destination": "/frontend/script.js"
-    }
+    },
+    {
+  "source": "/logo.png",
+  "destination": "/public/logo.png"
+}
   ]
 }

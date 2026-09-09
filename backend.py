@@ -13,16 +13,24 @@ PASTA_FRONTEND = Path(__file__).parent / "frontend"
 PASTAS_IGNORADAS = {".git", "node_modules", "__pycache__", "venv", ".venv",
                     "dist", "build", ".idea", ".vscode", ".next", ".cache"}
 
-# Extensões consideradas "arquivo de texto" -> só essas entram na análise
+# Extensões consideradas "arquivo de texto" -> só essas entram na análise de conteúdo
 EXTENSOES_TEXTO = {".txt", ".py", ".json", ".csv", ".md", ".html", ".htm", ".css", ".js", ".xml",
                     ".yaml", ".yml", ".log", ".ini", ".cfg", ".conf", ".sql", ".sh", ".bat", ".ts", ".jsx", ".tsx",
                     ".java", ".c", ".cpp", ".h", ".env", ".toml", ".ps1", }
 
+# Extensões consideradas "imagem" -> entram na análise separada, listadas mas sem conteúdo lido
+EXTENSOES_IMAGEM = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".ico"}
+
 LIMITE_CARACTERES_POR_ARQUIVO = 20000  # evita travar o front com arquivos gigantes
+DESCRICAO_ARQUIVO_VAZIO = "(Arquivo Vazio)"
 
 
 def eh_arquivo_de_texto(caminho: Path) -> bool:
     return caminho.suffix.lower() in EXTENSOES_TEXTO
+
+
+def eh_arquivo_de_imagem(caminho: Path) -> bool:
+    return caminho.suffix.lower() in EXTENSOES_IMAGEM
 
 
 def ler_conteudo(caminho: Path) -> str:
@@ -31,6 +39,10 @@ def ler_conteudo(caminho: Path) -> str:
         tamanho_total = caminho.stat().st_size
     except Exception as e:
         return f"[Não foi possível ler o arquivo: {e}]"
+
+    # Arquivo vazio (0 bytes): sinaliza direto, sem tentar ler nada.
+    if tamanho_total == 0:
+        return DESCRICAO_ARQUIVO_VAZIO
 
     try:
         if tamanho_total > LIMITE_CARACTERES_POR_ARQUIVO:
@@ -46,11 +58,27 @@ def ler_conteudo(caminho: Path) -> str:
     return conteudo
 
 
+def obter_tamanho_legivel(caminho: Path) -> str:
+    try:
+        tamanho = caminho.stat().st_size
+    except Exception:
+        return "-"
+
+    for unidade in ("B", "KB", "MB", "GB"):
+        if tamanho < 1024:
+            return f"{tamanho:.0f} {unidade}" if unidade == "B" else f"{tamanho:.1f} {unidade}"
+        tamanho /= 1024
+    return f"{tamanho:.1f} TB"
+
+
 def montar_texto_resumo(
     pasta_pai: Path,
     nome_arquivo: str,
     arquivos: list,
     contagem_por_extensao: dict,
+    imagens: list,
+    contagem_imagens: dict,
+    contagem_nao_texto: dict,
     total_arquivos: int,
 ) -> str:
     linhas = []
@@ -61,10 +89,31 @@ def montar_texto_resumo(
     linhas.append(f"Quantidade de arquivos de texto encontrados: {total_arquivos}")
     linhas.append("Quebra por tipo (extensão):")
     if not contagem_por_extensao:
-        linhas.append("- Nenhuma extensão encontrada")
+        linhas.append("- Nenhuma extensão de texto encontrada")
     else:
         for extensao in sorted(contagem_por_extensao.keys()):
             linhas.append(f"- {extensao}: {contagem_por_extensao[extensao]}")
+    linhas.append("")
+
+    linhas.append(f"Quantidade de imagens encontradas: {len(imagens)}")
+    linhas.append("Quebra por tipo (extensão):")
+    if not contagem_imagens:
+        linhas.append("- Nenhuma imagem encontrada")
+    else:
+        for extensao in sorted(contagem_imagens.keys()):
+            linhas.append(f"- {extensao}: {contagem_imagens[extensao]}")
+    if imagens:
+        linhas.append("Caminhos das imagens encontradas:")
+        for item in imagens:
+            linhas.append(f"- {item['caminho']} ({item['tamanho']})")
+    linhas.append("")
+
+    linhas.append("Outros elementos encontrados (não-texto e não-imagem):")
+    if not contagem_nao_texto:
+        linhas.append("- Nenhum outro elemento encontrado")
+    else:
+        for ext in sorted(contagem_nao_texto.keys()):
+            linhas.append(f"- Possui {contagem_nao_texto[ext]} arquivo(s) {ext} no caminho")
     linhas.append("")
 
     for item in arquivos:
@@ -118,12 +167,12 @@ def escanear_pasta(caminho_pasta: str, destino: str = "", filename: str = "") ->
     nome_arquivo = _definir_nome_arquivo(filename)
 
     arquivos = []
+    imagens = []
     contagem_por_extensao = {}
+    contagem_imagens = {}
+    contagem_nao_texto = {}
 
-    # Usa os.walk para poder pular (prunear) pastas irrelevantes,
-    # evitando varrer node_modules, .git, __pycache__ etc.
     for raiz, subpastas, arquivos_pasta in os.walk(pasta):
-        # Remove do walk as pastas irrelevantes (também evita entrar nelas)
         subpastas[:] = [
             s for s in subpastas
             if s not in PASTAS_IGNORADAS and s.lower() not in PASTAS_IGNORADAS
@@ -132,23 +181,30 @@ def escanear_pasta(caminho_pasta: str, destino: str = "", filename: str = "") ->
         for nome in arquivos_pasta:
             caminho = Path(raiz) / nome
 
-            if not eh_arquivo_de_texto(caminho):
-                continue
-
-            # ignora qualquer arquivo com o mesmo nome do resumo que vai ser gerado,
-            # pra não reanalisar um resumo antigo que esteja dentro da pasta
             if caminho.name == nome_arquivo:
                 continue
 
             extensao = caminho.suffix.lower() or "(sem extensão)"
-            contagem_por_extensao[extensao] = contagem_por_extensao.get(extensao, 0) + 1
 
-            arquivos.append(
-                {
-                    "caminho": str(caminho.resolve()),
-                    "conteudo": ler_conteudo(caminho),
-                }
-            )
+            if eh_arquivo_de_texto(caminho):
+                contagem_por_extensao[extensao] = contagem_por_extensao.get(extensao, 0) + 1
+                arquivos.append(
+                    {
+                        "caminho": str(caminho.resolve()),
+                        "conteudo": ler_conteudo(caminho),
+                    }
+                )
+            elif eh_arquivo_de_imagem(caminho):
+                contagem_imagens[extensao] = contagem_imagens.get(extensao, 0) + 1
+                imagens.append(
+                    {
+                        "caminho": str(caminho.resolve()),
+                        "nome": caminho.name,
+                        "tamanho": obter_tamanho_legivel(caminho),
+                    }
+                )
+            else:
+                contagem_nao_texto[extensao] = contagem_nao_texto.get(extensao, 0) + 1
 
     total_arquivos = len(arquivos)
     texto_resumo = montar_texto_resumo(
@@ -156,14 +212,14 @@ def escanear_pasta(caminho_pasta: str, destino: str = "", filename: str = "") ->
         nome_arquivo=nome_arquivo,
         arquivos=arquivos,
         contagem_por_extensao=contagem_por_extensao,
+        imagens=imagens,
+        contagem_imagens=contagem_imagens,
+        contagem_nao_texto=contagem_nao_texto,
         total_arquivos=total_arquivos,
     )
 
-    # O resumo NÃO é mais salvo dentro da pasta analisada.
-    # Só é salvo em disco (no servidor) se o usuário informar um caminho de destino.
-    # Se não informar, o texto completo volta no JSON e o front baixa pelo navegador.
-    salvo_em = None
     destino_final = _resolver_destino_final(destino, nome_arquivo)
+    salvo_em = None
     if destino_final is not None:
         destino_final.write_text(texto_resumo, encoding="utf-8")
         salvo_em = str(destino_final)
@@ -172,6 +228,9 @@ def escanear_pasta(caminho_pasta: str, destino: str = "", filename: str = "") ->
         "pasta_pai": str(pasta_pai),
         "total_arquivos": total_arquivos,
         "contagem_por_extensao": contagem_por_extensao,
+        "imagens": imagens,
+        "contagem_imagens": contagem_imagens,
+        "contagem_nao_texto": contagem_nao_texto,
         "arquivos": arquivos,
         "nome_arquivo": nome_arquivo,
         "texto_resumo": texto_resumo,

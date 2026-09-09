@@ -18,6 +18,10 @@ const metaTotal = document.getElementById("meta-total");
 const metaTipos = document.getElementById("meta-tipos");
 const listaArquivos = document.getElementById("lista-arquivos");
 
+const secaoImagens = document.getElementById("secao-imagens");
+const metaTotalImagens = document.getElementById("meta-total-imagens");
+const listaImagens = document.getElementById("lista-imagens");
+
 const EXTENSOES_TEXTO = new Set([
   ".txt",
   ".py",
@@ -50,15 +54,31 @@ const EXTENSOES_TEXTO = new Set([
   ".ps1",
 ]);
 
+// Extensões consideradas "imagem" -> listadas com miniatura, mas sem conteúdo no resumo.txt
+const EXTENSOES_IMAGEM = new Set([
+  ".png",
+  ".jpg",
+  ".jpeg",
+  ".gif",
+  ".webp",
+  ".svg",
+  ".bmp",
+  ".ico",
+]);
+
 const LIMITE_CARACTERES_POR_ARQUIVO = 20000;
 const CONCORRENCIA_LEITURA = 4; // nº de arquivos lidos em paralelo
 const ARQUIVOS_POR_PAGINA = 200; // quantos arquivos são renderizados por vez
+const IMAGENS_POR_PAGINA = 60; // quantas miniaturas são renderizadas por vez
+const DESCRICAO_ARQUIVO_VAZIO = "(Arquivo Vazio)";
 
 let ultimoResultado = null;
 let destinoHandle = null;
 let progressoIntervalo = null;
 let progressoAtual = 0;
 let arquivosExibidos = 0; // contador de arquivos já renderizados (paginação)
+let imagensExibidas = 0; // contador de imagens já renderizadas (paginação)
+let urlsImagensAtuais = []; // object URLs criadas para as miniaturas do último scan
 
 function definirNomeArquivo(filename) {
   let nome = (filename || "").trim().replace(/^"+|"+$/g, "");
@@ -76,6 +96,10 @@ function ehArquivoDeTexto(arquivo) {
   return EXTENSOES_TEXTO.has(obterExtensao(arquivo.name));
 }
 
+function ehArquivoDeImagem(arquivo) {
+  return EXTENSOES_IMAGEM.has(obterExtensao(arquivo.name));
+}
+
 function obterCaminhoRelativo(arquivo) {
   return arquivo.webkitRelativePath || arquivo.name;
 }
@@ -86,9 +110,27 @@ function obterNomePasta(files) {
   return caminho.split("/")[0] || "Pasta selecionada";
 }
 
+function formatarTamanho(bytes) {
+  if (bytes === 0) return "0 B";
+  const unidades = ["B", "KB", "MB", "GB"];
+  let valor = bytes;
+  let indice = 0;
+  while (valor >= 1024 && indice < unidades.length - 1) {
+    valor /= 1024;
+    indice++;
+  }
+  return `${indice === 0 ? valor : valor.toFixed(1)} ${unidades[indice]}`;
+}
+
 async function lerConteudo(arquivo) {
   try {
     const tamanhoTotal = arquivo.size;
+
+    // Arquivo vazio (0 bytes): sinaliza direto, sem tentar ler nada.
+    if (tamanhoTotal === 0) {
+      return DESCRICAO_ARQUIVO_VAZIO;
+    }
+
     if (tamanhoTotal > LIMITE_CARACTERES_POR_ARQUIVO) {
       const preview = arquivo.slice(0, LIMITE_CARACTERES_POR_ARQUIVO * 2);
       const conteudo = await preview.text();
@@ -128,20 +170,49 @@ async function lerArquivosComProgresso(arquivos, onProgresso) {
   return resultados;
 }
 
-function montarTextoResumo({ pastaPai, nomeArquivo, arquivos, contagemPorExtensao }) {
+function montarTextoResumo({ pastaPai, nomeArquivo, arquivos, contagemPorExtensao, imagens, contagemImagensPorExtensao, contagemNaoTextoPorExtensao }) {
   const linhas = [];
   linhas.push(`Caminho da pasta "pai" que foi analisado: ${pastaPai}`);
   linhas.push(`Nome do arquivo de resumo: ${nomeArquivo}`);
   linhas.push("");
   linhas.push(`Quantidade de arquivos de texto encontrados: ${arquivos.length}`);
-  linhas.push("Quebra por tipo (extensao):");
+  linhas.push("Quebra por tipo (extensão):");
 
   const extensoes = Object.keys(contagemPorExtensao).sort();
   if (extensoes.length === 0) {
-    linhas.push("- Nenhuma extensao encontrada");
+    linhas.push("- Nenhuma extensão de texto encontrada");
   } else {
     for (const extensao of extensoes) {
       linhas.push(`- ${extensao}: ${contagemPorExtensao[extensao]}`);
+    }
+  }
+
+  linhas.push("");
+  linhas.push(`Quantidade de imagens encontradas: ${imagens.length}`);
+  linhas.push("Quebra por tipo (extensão):");
+  const extensoesImagem = Object.keys(contagemImagensPorExtensao || {}).sort();
+  if (extensoesImagem.length === 0) {
+    linhas.push("- Nenhuma imagem encontrada");
+  } else {
+    for (const extensao of extensoesImagem) {
+      linhas.push(`- ${extensao}: ${contagemImagensPorExtensao[extensao]}`);
+    }
+  }
+  if (imagens.length > 0) {
+    linhas.push("Caminhos das imagens encontradas:");
+    for (const item of imagens) {
+      linhas.push(`- ${item.caminho} (${item.tamanhoLegivel})`);
+    }
+  }
+
+  linhas.push("");
+  linhas.push("Outros elementos encontrados (não-texto e não-imagem):");
+  const extensoesOutros = Object.keys(contagemNaoTextoPorExtensao || {}).sort();
+  if (extensoesOutros.length === 0) {
+    linhas.push("- Nenhum outro elemento encontrado");
+  } else {
+    for (const ext of extensoesOutros) {
+      linhas.push(`- Possui ${contagemNaoTextoPorExtensao[ext]} arquivo(s) .${ext.replace('.', '')} no caminho`);
     }
   }
 
@@ -154,7 +225,7 @@ function montarTextoResumo({ pastaPai, nomeArquivo, arquivos, contagemPorExtensa
     linhas.push("");
   }
 
-  linhas.push("Analise concluida");
+  linhas.push("Análise concluída");
   return linhas.join("\n");
 }
 
@@ -172,14 +243,37 @@ async function escanear() {
 
   try {
     const pastaPai = obterNomePasta(files);
-    const arquivosTexto = files
-      .filter((arquivo) => ehArquivoDeTexto(arquivo) && arquivo.name !== nomeArquivo)
-      .sort((a, b) => obterCaminhoRelativo(a).localeCompare(obterCaminhoRelativo(b)));
+
+    const arquivosTexto = [];
+    const arquivosImagem = [];
+    const contagemNaoTextoPorExtensao = {};
+
+    for (const arquivo of files) {
+      if (arquivo.name === nomeArquivo) continue;
+
+      if (ehArquivoDeTexto(arquivo)) {
+        arquivosTexto.push(arquivo);
+      } else if (ehArquivoDeImagem(arquivo)) {
+        arquivosImagem.push(arquivo);
+      } else {
+        const extensao = obterExtensao(arquivo.name) || "(sem extensão)";
+        contagemNaoTextoPorExtensao[extensao] = (contagemNaoTextoPorExtensao[extensao] || 0) + 1;
+      }
+    }
+
+    arquivosTexto.sort((a, b) => obterCaminhoRelativo(a).localeCompare(obterCaminhoRelativo(b)));
+    arquivosImagem.sort((a, b) => obterCaminhoRelativo(a).localeCompare(obterCaminhoRelativo(b)));
 
     const contagemPorExtensao = {};
     for (const arquivo of arquivosTexto) {
-      const extensao = obterExtensao(arquivo.name) || "(sem extensao)";
+      const extensao = obterExtensao(arquivo.name) || "(sem extensão)";
       contagemPorExtensao[extensao] = (contagemPorExtensao[extensao] || 0) + 1;
+    }
+
+    const contagemImagensPorExtensao = {};
+    for (const arquivo of arquivosImagem) {
+      const extensao = obterExtensao(arquivo.name) || "(sem extensão)";
+      contagemImagensPorExtensao[extensao] = (contagemImagensPorExtensao[extensao] || 0) + 1;
     }
 
     const conteudos = await lerArquivosComProgresso(arquivosTexto, (concluidos, total) => {
@@ -191,11 +285,29 @@ async function escanear() {
       conteudo: conteudos[indice],
     }));
 
+    // Libera as miniaturas do scan anterior antes de gerar novas (evita vazamento de memória)
+    liberarUrlsImagensAtuais();
+
+    const imagens = arquivosImagem.map((arquivo) => {
+      const url = URL.createObjectURL(arquivo);
+      urlsImagensAtuais.push(url);
+      return {
+        caminho: obterCaminhoRelativo(arquivo),
+        nome: arquivo.name,
+        tamanho: arquivo.size,
+        tamanhoLegivel: formatarTamanho(arquivo.size),
+        url,
+      };
+    });
+
     const textoResumo = montarTextoResumo({
       pastaPai,
       nomeArquivo,
       arquivos,
       contagemPorExtensao,
+      imagens,
+      contagemImagensPorExtensao,
+      contagemNaoTextoPorExtensao
     });
 
     const salvoEm = await salvarResumo(textoResumo, nomeArquivo);
@@ -204,6 +316,9 @@ async function escanear() {
       pasta_pai: pastaPai,
       total_arquivos: arquivos.length,
       contagem_por_extensao: contagemPorExtensao,
+      imagens,
+      contagem_imagens: contagemImagensPorExtensao,
+      contagem_nao_texto: contagemNaoTextoPorExtensao,
       arquivos,
       nome_arquivo: nomeArquivo,
       texto_resumo: textoResumo,
@@ -212,10 +327,17 @@ async function escanear() {
 
     renderizarResultado(resultado);
   } catch (erro) {
-    mostrarErro(`Nao foi possivel concluir o scan: ${erro.message || erro}`);
+    mostrarErro(`Não foi possível concluir o scan: ${erro.message || erro}`);
   } finally {
     finalizarEstadoCarregando();
   }
+}
+
+function liberarUrlsImagensAtuais() {
+  for (const url of urlsImagensAtuais) {
+    URL.revokeObjectURL(url);
+  }
+  urlsImagensAtuais = [];
 }
 
 async function salvarResumo(conteudo, nomeArquivo) {
@@ -232,7 +354,7 @@ async function salvarResumo(conteudo, nomeArquivo) {
     return `${destinoHandle.name}/${nomeArquivo}`;
   } catch (erro) {
     baixarPeloNavegador(conteudo, nomeArquivo);
-    mostrarErro("Nao foi possivel salvar na pasta escolhida. O resumo foi baixado pelo navegador.");
+    mostrarErro("Não foi possível salvar na pasta escolhida. O resumo foi baixado pelo navegador.");
     return null;
   }
 }
@@ -325,6 +447,8 @@ function renderizarResultado(dados) {
     renderizarMaisArquivos();
   }
 
+  renderizarSecaoImagens(dados);
+
   areaResultado.classList.remove("varrendo");
   void areaResultado.offsetWidth;
   areaResultado.classList.add("varrendo");
@@ -373,6 +497,69 @@ function renderizarMaisArquivos() {
     botao.textContent = `Mostrar mais (${lista.length - arquivosExibidos} restantes)`;
     botao.addEventListener("click", renderizarMaisArquivos);
     listaArquivos.appendChild(botao);
+  }
+}
+
+// Renderiza a seção de imagens encontradas (miniaturas), com a mesma
+// paginação em "páginas" usada para os arquivos de texto.
+function renderizarSecaoImagens(dados) {
+  const imagens = dados.imagens || [];
+  listaImagens.innerHTML = "";
+  imagensExibidas = 0;
+
+  if (imagens.length === 0) {
+    secaoImagens.hidden = true;
+    metaTotalImagens.textContent = "0 imagens";
+    return;
+  }
+
+  secaoImagens.hidden = false;
+  metaTotalImagens.textContent = `${imagens.length} imagem(ns)`;
+  renderizarMaisImagens();
+}
+
+function renderizarMaisImagens() {
+  const dados = ultimoResultado;
+  if (!dados) return;
+
+  const lista = dados.imagens || [];
+  const fim = Math.min(imagensExibidas + IMAGENS_POR_PAGINA, lista.length);
+
+  for (let i = imagensExibidas; i < fim; i++) {
+    const imagem = lista[i];
+
+    const item = document.createElement("figure");
+    item.className = "imagem-item";
+
+    const miniatura = document.createElement("img");
+    miniatura.className = "imagem-item__miniatura";
+    miniatura.src = imagem.url;
+    miniatura.alt = imagem.nome;
+    miniatura.loading = "lazy";
+
+    const legenda = document.createElement("figcaption");
+    legenda.className = "imagem-item__legenda";
+    legenda.title = imagem.caminho;
+    legenda.textContent = `${imagem.nome} (${imagem.tamanhoLegivel})`;
+
+    item.appendChild(miniatura);
+    item.appendChild(legenda);
+    listaImagens.appendChild(item);
+  }
+
+  imagensExibidas = fim;
+
+  const botaoAntigo = document.getElementById("botao-mostrar-mais-imagens");
+  if (botaoAntigo) botaoAntigo.remove();
+
+  if (imagensExibidas < lista.length) {
+    const botao = document.createElement("button");
+    botao.id = "botao-mostrar-mais-imagens";
+    botao.className = "botao-mostrar-mais";
+    botao.type = "button";
+    botao.textContent = `Mostrar mais imagens (${lista.length - imagensExibidas} restantes)`;
+    botao.addEventListener("click", renderizarMaisImagens);
+    listaImagens.appendChild(botao);
   }
 }
 

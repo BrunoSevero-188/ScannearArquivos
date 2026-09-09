@@ -45,6 +45,13 @@ body {
   margin-bottom: 8px;
 }
 
+.topo__logo {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  border-radius: 6px;
+}
+
 .topo__indicador {
   width: 10px;
   height: 10px;
@@ -397,6 +404,65 @@ body {
   margin: 0;
 }
 
+/* --- seção de imagens encontradas (miniaturas) --- */
+.secao-imagens {
+  border-top: 1px dashed #D2DBE3;
+  padding: 16px 22px 20px;
+}
+
+.secao-imagens__cabecalho {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.secao-imagens__titulo {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #17263A;
+}
+
+.lista-imagens {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.imagem-item {
+  margin: 0;
+  border: 1px solid #D2DBE3;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #FBFCFD;
+  transition: border-color 0.15s ease, transform 0.1s ease;
+}
+
+.imagem-item:hover {
+  border-color: rgba(8, 145, 168, 0.5);
+  transform: translateY(-1px);
+}
+
+.imagem-item__miniatura {
+  display: block;
+  width: 100%;
+  height: 96px;
+  object-fit: cover;
+  background: #EEF2F6;
+}
+
+.imagem-item__legenda {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.68rem;
+  color: #5B6B7D;
+  padding: 6px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* --- botão "Mostrar mais" (paginação de resultados) --- */
 .botao-mostrar-mais {
   font-family: "IBM Plex Mono", monospace;
@@ -488,6 +554,11 @@ body {
     font-size: 1.5rem;
   }
 
+  .topo__logo {
+    width: 26px;
+    height: 26px;
+  }
+
   .console {
     padding: 0 16px 48px;
     gap: 16px;
@@ -516,6 +587,15 @@ body {
   .arquivo__conteudo {
     font-size: 0.72rem;
     max-height: 200px;
+  }
+
+  .lista-imagens {
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    gap: 8px;
+  }
+
+  .imagem-item__miniatura {
+    height: 72px;
   }
 }
 
@@ -575,6 +655,11 @@ body {
 
   .topo__titulo {
     font-size: 3rem;
+  }
+
+  .topo__logo {
+    width: 48px;
+    height: 48px;
   }
 
   .topo__subtitulo {
@@ -638,5 +723,23 @@ body {
   .botao-drive {
     font-size: 1.1rem;
     padding: 10px 22px;
+  }
+
+  .secao-imagens__titulo {
+    font-size: 1.15rem;
+  }
+
+  .lista-imagens {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 18px;
+  }
+
+  .imagem-item__miniatura {
+    height: 150px;
+  }
+
+  .imagem-item__legenda {
+    font-size: 0.95rem;
+    padding: 8px 10px;
   }
 }
